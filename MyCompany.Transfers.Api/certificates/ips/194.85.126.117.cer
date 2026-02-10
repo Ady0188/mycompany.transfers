@@ -1,0 +1,57 @@
+SHA1 Fingerprint=46:B2:A2:E4:16:B0:E7:6B:15:33:4F:2B:A5:70:F3:69:E0:48:BA:10
+        Serial Number: 1655 (0x677)
+        Signature Algorithm: sha512WithRSAEncryption
+        Issuer: C = RU, O = Center of Financial Technologies, CN = Class 4 CA
+        Validity
+            Not Before: Jul 22 04:44:35 2024 GMT
+            Not After : Jul 22 04:44:35 2025 GMT
+        Subject: C = RU, L = Novosibirsk, O = ftps@buran.tmp.ftc.ru CardStandard20240719_123823, OU = Support, CN = 194.85.126.117, emailAddress = help@cardstandard.ru
+        X509v3 extensions:
+            X509v3 Basic Constraints: 
+                CA:FALSE
+            Netscape Cert Type: 
+                SSL Server
+            X509v3 Key Usage: 
+                Digital Signature, Non Repudiation, Key Encipherment
+            Netscape Comment: 
+                FTC Generated Certificate
+            X509v3 Subject Key Identifier: 
+                12:A1:7A:9E:9A:EF:B3:D1:E1:8F:33:2D:24:08:29:DC:00:13:9C:0F
+            X509v3 Authority Key Identifier: 
+                DirName:/C=RU/O=Center of Financial Technologies/CN=Primary CA
+                serial:06
+            X509v3 Subject Alternative Name: 
+                DNS:buran.ftc.ru, DNS:buran.tmp.ftc.ru, DNS:cs.demo.korona.net, DNS:194.85.126.117, DNS:192.168.100.27, IP Address:194.85.126.117, IP Address:192.168.100.27
+-----BEGIN CERTIFICATE-----
+MIIFvzCCA6egAwIBAgICBncwDQYJKoZIhvcNAQENBQAwTTELMAkGA1UEBhMCUlUx
+KTAnBgNVBAoTIENlbnRlciBvZiBGaW5hbmNpYWwgVGVjaG5vbG9naWVzMRMwEQYD
+VQQDEwpDbGFzcyA0IENBMB4XDTI0MDcyMjA0NDQzNVoXDTI1MDcyMjA0NDQzNVow
+ga8xCzAJBgNVBAYTAlJVMRQwEgYDVQQHDAtOb3Zvc2liaXJzazE6MDgGA1UECgwx
+ZnRwc0BidXJhbi50bXAuZnRjLnJ1IENhcmRTdGFuZGFyZDIwMjQwNzE5XzEyMzgy
+MzEQMA4GA1UECwwHU3VwcG9ydDEXMBUGA1UEAwwOMTk0Ljg1LjEyNi4xMTcxIzAh
+BgkqhkiG9w0BCQEWFGhlbHBAY2FyZHN0YW5kYXJkLnJ1MIIBIjANBgkqhkiG9w0B
+AQEFAAOCAQ8AMIIBCgKCAQEAuvPI8vpDu89s0VNE7u4tZvogIE8UcHNkbtLWMUFB
+XUFbI/qoNcXbqehzIsiH0MW4OXvl6aR9P1WM6xUVnUycxQRd018j8M8orfg/XMam
+QVb43sZcAFysC1QQUDhpW7xK/UE3c5CZZMkQWIsKmsaqTHAqQcocQHXq76QB6Slo
+MIcMK2e9UrVpxDQgnGwWPwXsNTSEJt+VKEDxmECXwRrXUq+HrleKDSHjVkkLWbTa
+653Ro4ktq+8oZaO66wrTyB68Hy1X9HUfLHW2+6DZ1MXpFk2h4TrQ5E+B77m/R5ru
+fIDggzndQXcnmyXrUS0WILS2PYWr1lZt4KumicPvhx4VFQIDAQABo4IBRDCCAUAw
+CQYDVR0TBAIwADARBglghkgBhvhCAQEEBAMCBkAwCwYDVR0PBAQDAgXgMCgGCWCG
+SAGG+EIBDQQbFhlGVEMgR2VuZXJhdGVkIENlcnRpZmljYXRlMB0GA1UdDgQWBBQS
+oXqemu+z0eGPMy0kCCncABOcDzBfBgNVHSMEWDBWoVGkTzBNMQswCQYDVQQGEwJS
+VTEpMCcGA1UEChMgQ2VudGVyIG9mIEZpbmFuY2lhbCBUZWNobm9sb2dpZXMxEzAR
+BgNVBAMTClByaW1hcnkgQ0GCAQYwaQYDVR0RBGIwYIIMYnVyYW4uZnRjLnJ1ghBi
+dXJhbi50bXAuZnRjLnJ1ghJjcy5kZW1vLmtvcm9uYS5uZXSCDjE5NC44NS4xMjYu
+MTE3gg4xOTIuMTY4LjEwMC4yN4cEwlV+dYcEwKhkGzANBgkqhkiG9w0BAQ0FAAOC
+AgEAreqJD67VEUl23C2AWfR1cdvBt9pS4UvJ1oSQIqKEo7KnRJvJ5tkTMSIv+Nxa
+nrCqp8oa4YEl4/tP+K7OoDjZy619fJcCxQomREO1uCKL54y9cwQ0NGWnBEZ0CK9F
+/vcgVD+cKLwdTELOxxsCMiSHslf44BsIC2x6cX0E+ke7LN4zrInMXHB6uOmDFL/C
+Uf3vqIjEFNgZGlldCQTXZz07pot7f4rBTho6R6Po0l1hAExLKsF1zKbZdnSSGes+
+0Kw0UYeCPgCxYQnP0tfwT+sioF98lNxZfQODjPsPw7K8w7PtJrsT2xOpvzXDtZeb
+5o38Ll/kvbQp6qY0CYdieEQW2oY8pabDJ0JSIMQuwQ1ukU6S1Rwmi4UKLRSJTX0t
+3XfXGJhG3T9ST4FOZDKR8abZNajjHQ56j1rgGB/nboASVzsLE5D24a5iVaNbgXEp
+IFeDwZo5myBrzDmrIhn8YTOryA/YwWxZUo8LWRgIjomN7KywT+c2HkKRMe9yS2oa
+wAvdF8/lQlvbEdbIv08M+orYdm6Tb8BCtcwlev+uK4ceyenRdTCnKO2NFZ7kI7Bu
+N+Raqb66sQ6Yivxc6A6z4F0U2WKaSA4RJMc6Hxchb2xFQqg0M3QFKJYqerqWV6Qi
+BeTtLteC4ScPQYvuFFjBTwsJc2IKKRiV46W3S4mkjE3OI+o=
+-----END CERTIFICATE-----
