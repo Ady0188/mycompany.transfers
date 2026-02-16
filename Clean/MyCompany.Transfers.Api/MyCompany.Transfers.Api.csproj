@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MyCompany.Transfers.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ErrorOr" Version="2.0.1" />
+    <PackageReference Include="NLog.Web.AspNetCore" Version="5.3.14" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Update="NLog.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyCompany.Transfers.Application\MyCompany.Transfers.Application.csproj" />
+    <ProjectReference Include="..\MyCompany.Transfers.Contract\MyCompany.Transfers.Contract.csproj" />
+    <ProjectReference Include="..\MyCompany.Transfers.Domain\MyCompany.Transfers.Domain.csproj" />
+    <ProjectReference Include="..\MyCompany.Transfers.Infrastructure\MyCompany.Transfers.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
