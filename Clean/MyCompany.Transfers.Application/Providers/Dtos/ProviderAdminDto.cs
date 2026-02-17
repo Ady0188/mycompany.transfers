@@ -4,6 +4,7 @@ namespace MyCompany.Transfers.Application.Providers.Dtos;
 
 public sealed record ProviderAdminDto(
     string Id,
+    string Account,
     string Name,
     string BaseUrl,
     int TimeoutSeconds,
@@ -14,5 +15,5 @@ public sealed record ProviderAdminDto(
     int FeePermille)
 {
     public static ProviderAdminDto FromDomain(Provider p) =>
-        new(p.Id, p.Name, p.BaseUrl, p.TimeoutSeconds, p.AuthType, p.SettingsJson, p.IsEnabled, p.IsOnline, p.FeePermille);
+        new(p.Id, p.Account, p.Name, p.BaseUrl, p.TimeoutSeconds, p.AuthType, p.SettingsJson, p.IsEnabled, p.IsOnline, p.FeePermille);
 }

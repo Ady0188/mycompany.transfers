@@ -39,7 +39,7 @@ public sealed class AgentsController : BaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AgentAdminDto dto, CancellationToken ct)
     {
-        var cmd = new CreateAgentCommand(dto.Id, dto.TimeZoneId, dto.SettingsJson);
+        var cmd = new CreateAgentCommand(dto.Id, dto.Account, dto.TimeZoneId, dto.SettingsJson);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created), Problem);
     }
@@ -47,7 +47,7 @@ public sealed class AgentsController : BaseController
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] AgentAdminDto dto, CancellationToken ct)
     {
-        var cmd = new UpdateAgentCommand(id, dto.TimeZoneId, dto.SettingsJson);
+        var cmd = new UpdateAgentCommand(id, dto.Account, dto.TimeZoneId, dto.SettingsJson);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(updated => Ok(updated), Problem);
     }

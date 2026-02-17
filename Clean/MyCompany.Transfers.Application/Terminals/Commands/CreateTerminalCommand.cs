@@ -18,11 +18,13 @@ public sealed record CreateTerminalCommand(
 public sealed class CreateTerminalCommandHandler : IRequestHandler<CreateTerminalCommand, ErrorOr<TerminalAdminDto>>
 {
     private readonly ITerminalRepository _terminals;
+    private readonly IAgentReadRepository _agents;
     private readonly IUnitOfWork _uow;
 
-    public CreateTerminalCommandHandler(ITerminalRepository terminals, IUnitOfWork uow)
+    public CreateTerminalCommandHandler(ITerminalRepository terminals, IAgentReadRepository agents, IUnitOfWork uow)
     {
         _terminals = terminals;
+        _agents = agents;
         _uow = uow;
     }
 
@@ -30,6 +32,8 @@ public sealed class CreateTerminalCommandHandler : IRequestHandler<CreateTermina
     {
         if (await _terminals.ExistsAsync(cmd.Id, ct))
             return AppErrors.Common.Validation($"Терминал '{cmd.Id}' уже существует.");
+        if (!await _agents.ExistsAsync(cmd.AgentId, ct))
+            return AppErrors.Common.Validation($"Агент '{cmd.AgentId}' не найден. Создание терминала невозможно.");
 
         var terminal = Terminal.Create(cmd.Id, cmd.AgentId, cmd.Name, cmd.ApiKey, cmd.Secret ?? "", cmd.Active);
 

@@ -1,3 +1,5 @@
+using MyCompany.Transfers.Domain.Common;
+
 namespace MyCompany.Transfers.Domain.Agents;
 
 public sealed class AgentServiceAccess
@@ -17,6 +19,20 @@ public sealed class AgentServiceAccess
         Enabled = enabled;
         FeePermille = feePermille;
         FeeFlatMinor = feeFlatMinor;
+    }
+
+    public static AgentServiceAccess Create(string agentId, string serviceId, bool enabled = true, int feePermille = 0, long feeFlatMinor = 0)
+    {
+        if (string.IsNullOrWhiteSpace(agentId)) throw new DomainException("AgentId обязателен.");
+        if (string.IsNullOrWhiteSpace(serviceId)) throw new DomainException("ServiceId обязателен.");
+        return new AgentServiceAccess(agentId, serviceId, enabled, feePermille, feeFlatMinor);
+    }
+
+    public void UpdateProfile(bool? enabled = null, int? feePermille = null, long? feeFlatMinor = null)
+    {
+        if (enabled.HasValue) Enabled = enabled.Value;
+        if (feePermille.HasValue) FeePermille = feePermille.Value;
+        if (feeFlatMinor.HasValue) FeeFlatMinor = feeFlatMinor.Value;
     }
 
     public long CalculateFee(long amountMinor) =>

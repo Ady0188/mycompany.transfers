@@ -24,4 +24,18 @@ public sealed class FxRateRepository : IFxRateRepository
 
         return row is null ? null : (row.Rate, row.UpdatedAtUtc);
     }
+
+    public Task<FxRate?> GetForUpdateAsync(string agentId, string baseCcy, string quoteCcy, CancellationToken ct) =>
+        _db.FxRates.FirstOrDefaultAsync(r => r.AgentId == agentId && r.BaseCurrency == baseCcy && r.QuoteCurrency == quoteCcy, ct);
+
+    public async Task<IReadOnlyList<FxRate>> GetAllForAdminAsync(string? agentId, CancellationToken ct)
+    {
+        var q = _db.FxRates.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(agentId))
+            q = q.Where(r => r.AgentId == agentId);
+        return await q.OrderBy(r => r.AgentId).ThenBy(r => r.BaseCurrency).ThenBy(r => r.QuoteCurrency).ToListAsync(ct).ConfigureAwait(false);
+    }
+
+    public void Add(FxRate entity) => _db.FxRates.Add(entity);
+    public void Update(FxRate entity) => _db.FxRates.Update(entity);
 }

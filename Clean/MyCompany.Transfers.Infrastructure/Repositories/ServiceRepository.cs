@@ -20,6 +20,12 @@ public sealed class ServiceRepository : IServiceRepository
     public Task<Service?> GetForUpdateAsync(string serviceId, CancellationToken ct) =>
         _db.Services.Include(s => s.Parameters).FirstOrDefaultAsync(s => s.Id == serviceId, ct);
 
+    public Task<bool> AnyByProviderIdAsync(string providerId, CancellationToken ct) =>
+        _db.Services.AnyAsync(s => s.ProviderId == providerId, ct);
+
+    public Task<bool> AnyByAccountDefinitionIdAsync(Guid accountDefinitionId, CancellationToken ct) =>
+        _db.Services.AnyAsync(s => s.AccountDefinitionId == accountDefinitionId, ct);
+
     public Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct) =>
         _db.Services.Include(s => s.Parameters).AsNoTracking().OrderBy(s => s.Id).ToListAsync(ct).ContinueWith(t => (IReadOnlyList<Service>)t.Result, ct);
 

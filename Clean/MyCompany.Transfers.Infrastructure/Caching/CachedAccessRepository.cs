@@ -23,4 +23,36 @@ public sealed class CachedAccessRepository : IAccessRepository
 
     public async Task<List<string>> GetAllowedCurrenciesAsync(string agentId, CancellationToken ct) =>
         (await _cache.GetOrCreateAsync($"acc:ccy:list:{agentId}", async _ => (List<string>?)await _inner.GetAllowedCurrenciesAsync(agentId, ct), Ttl, ct)) ?? new List<string>();
+
+    public Task<bool> AnyByAgentIdAsync(string agentId, CancellationToken ct) =>
+        _inner.AnyByAgentIdAsync(agentId, ct);
+
+    public Task<bool> AnyByServiceIdAsync(string serviceId, CancellationToken ct) =>
+        _inner.AnyByServiceIdAsync(serviceId, ct);
+
+    public Task<IReadOnlyList<AgentServiceAccess>> GetAllAgentServiceAccessAsync(CancellationToken ct) =>
+        _inner.GetAllAgentServiceAccessAsync(ct);
+
+    public Task<AgentServiceAccess?> GetAgentServiceAccessForUpdateAsync(string agentId, string serviceId, CancellationToken ct) =>
+        _inner.GetAgentServiceAccessForUpdateAsync(agentId, serviceId, ct);
+
+    public Task<bool> ExistsAgentServiceAccessAsync(string agentId, string serviceId, CancellationToken ct) =>
+        _inner.ExistsAgentServiceAccessAsync(agentId, serviceId, ct);
+
+    public void Add(AgentServiceAccess entity) => _inner.Add(entity);
+    public void Update(AgentServiceAccess entity) => _inner.Update(entity);
+    public void Remove(AgentServiceAccess entity) => _inner.Remove(entity);
+
+    public Task<IReadOnlyList<AgentCurrencyAccess>> GetAllAgentCurrencyAccessAsync(CancellationToken ct) =>
+        _inner.GetAllAgentCurrencyAccessAsync(ct);
+
+    public Task<AgentCurrencyAccess?> GetAgentCurrencyAccessForUpdateAsync(string agentId, string currency, CancellationToken ct) =>
+        _inner.GetAgentCurrencyAccessForUpdateAsync(agentId, currency, ct);
+
+    public Task<bool> ExistsAgentCurrencyAccessAsync(string agentId, string currency, CancellationToken ct) =>
+        _inner.ExistsAgentCurrencyAccessAsync(agentId, currency, ct);
+
+    public void Add(AgentCurrencyAccess entity) => _inner.Add(entity);
+    public void Update(AgentCurrencyAccess entity) => _inner.Update(entity);
+    public void Remove(AgentCurrencyAccess entity) => _inner.Remove(entity);
 }

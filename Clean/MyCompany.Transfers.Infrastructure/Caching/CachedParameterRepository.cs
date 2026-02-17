@@ -32,4 +32,20 @@ public sealed class CachedParameterRepository : IParameterRepository
         }
         return result;
     }
+
+    public Task<IReadOnlyList<ParamDefinition>> GetAllForAdminAsync(CancellationToken ct) =>
+        _inner.GetAllForAdminAsync(ct);
+
+    public Task<ParamDefinition?> GetForUpdateAsync(string id, CancellationToken ct) =>
+        _inner.GetForUpdateAsync(id, ct);
+
+    public Task<bool> ExistsAsync(string id, CancellationToken ct) =>
+        _cache.GetOrCreateAsync($"param:exists:{id}", _ => _inner.ExistsAsync(id, ct), Ttl, ct);
+
+    public Task<bool> AnyUsedByServiceAsync(string parameterId, CancellationToken ct) =>
+        _inner.AnyUsedByServiceAsync(parameterId, ct);
+
+    public void Add(ParamDefinition param) => _inner.Add(param);
+    public void Update(ParamDefinition param) => _inner.Update(param);
+    public void Remove(ParamDefinition param) => _inner.Remove(param);
 }

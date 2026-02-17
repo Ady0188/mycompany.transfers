@@ -8,6 +8,8 @@ public interface IServiceRepository
     Task<Service?> GetByIdAsync(string serviceId, CancellationToken ct);
     Task<(Service? Service, bool IsByPan)> GetByIdWithTypeAsync(string serviceId, CancellationToken ct);
     Task<Service?> GetForUpdateAsync(string serviceId, CancellationToken ct);
+    Task<bool> AnyByProviderIdAsync(string providerId, CancellationToken ct);
+    Task<bool> AnyByAccountDefinitionIdAsync(Guid accountDefinitionId, CancellationToken ct);
     Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct);
     void Add(Service service);
     void Update(Service service);

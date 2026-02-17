@@ -1,3 +1,5 @@
+using MyCompany.Transfers.Domain.Common;
+
 namespace MyCompany.Transfers.Domain.Rates;
 
 public sealed class FxRate
@@ -23,4 +25,23 @@ public sealed class FxRate
         Source = source;
         IsActive = isActive;
     }
+
+    public static FxRate Create(string agentId, string baseCcy, string quoteCcy, decimal rate, DateTimeOffset updatedAtUtc, string source = "manual", bool isActive = true)
+    {
+        if (string.IsNullOrWhiteSpace(agentId)) throw new DomainException("AgentId обязателен.");
+        if (string.IsNullOrWhiteSpace(baseCcy)) throw new DomainException("BaseCurrency обязателен.");
+        if (string.IsNullOrWhiteSpace(quoteCcy)) throw new DomainException("QuoteCurrency обязателен.");
+        if (rate <= 0) throw new DomainException("Курс должен быть положительным.");
+        return new FxRate(agentId, baseCcy, quoteCcy, rate, updatedAtUtc, source, isActive);
+    }
+
+    public void UpdateRate(decimal rate, DateTimeOffset updatedAtUtc, string? source = null)
+    {
+        if (rate <= 0) throw new DomainException("Курс должен быть положительным.");
+        Rate = rate;
+        UpdatedAtUtc = updatedAtUtc;
+        if (source != null) Source = source;
+    }
+
+    public void SetActive(bool isActive) => IsActive = isActive;
 }

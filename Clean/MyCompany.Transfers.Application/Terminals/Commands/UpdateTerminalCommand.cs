@@ -18,11 +18,13 @@ public sealed record UpdateTerminalCommand(
 public sealed class UpdateTerminalCommandHandler : IRequestHandler<UpdateTerminalCommand, ErrorOr<TerminalAdminDto>>
 {
     private readonly ITerminalRepository _terminals;
+    private readonly IAgentReadRepository _agents;
     private readonly IUnitOfWork _uow;
 
-    public UpdateTerminalCommandHandler(ITerminalRepository terminals, IUnitOfWork uow)
+    public UpdateTerminalCommandHandler(ITerminalRepository terminals, IAgentReadRepository agents, IUnitOfWork uow)
     {
         _terminals = terminals;
+        _agents = agents;
         _uow = uow;
     }
 
@@ -31,6 +33,8 @@ public sealed class UpdateTerminalCommandHandler : IRequestHandler<UpdateTermina
         var terminal = await _terminals.GetForUpdateAsync(cmd.Id, ct);
         if (terminal is null)
             return AppErrors.Common.NotFound($"Терминал '{cmd.Id}' не найден.");
+        if (cmd.AgentId is not null && !await _agents.ExistsAsync(cmd.AgentId, ct))
+            return AppErrors.Common.Validation($"Агент '{cmd.AgentId}' не найден.");
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {

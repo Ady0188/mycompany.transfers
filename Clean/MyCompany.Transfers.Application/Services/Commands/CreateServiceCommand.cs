@@ -22,11 +22,22 @@ public sealed record CreateServiceCommand(
 public sealed class CreateServiceCommandHandler : IRequestHandler<CreateServiceCommand, ErrorOr<ServiceAdminDto>>
 {
     private readonly IServiceRepository _services;
+    private readonly IProviderRepository _providers;
+    private readonly IAccountDefinitionRepository _accountDefinitions;
+    private readonly IParameterRepository _parameters;
     private readonly IUnitOfWork _uow;
 
-    public CreateServiceCommandHandler(IServiceRepository services, IUnitOfWork uow)
+    public CreateServiceCommandHandler(
+        IServiceRepository services,
+        IProviderRepository providers,
+        IAccountDefinitionRepository accountDefinitions,
+        IParameterRepository parameters,
+        IUnitOfWork uow)
     {
         _services = services;
+        _providers = providers;
+        _accountDefinitions = accountDefinitions;
+        _parameters = parameters;
         _uow = uow;
     }
 
@@ -34,6 +45,18 @@ public sealed class CreateServiceCommandHandler : IRequestHandler<CreateServiceC
     {
         if (await _services.ExistsAsync(cmd.Id, ct))
             return AppErrors.Common.Validation($"Услуга '{cmd.Id}' уже существует.");
+        if (!await _providers.ExistsAsync(cmd.ProviderId, ct))
+            return AppErrors.Common.Validation($"Провайдер '{cmd.ProviderId}' не найден.");
+        if (await _accountDefinitions.GetAsync(cmd.AccountDefinitionId, ct) is null)
+            return AppErrors.Common.Validation($"Определение счёта с Id '{cmd.AccountDefinitionId}' не найдено.");
+        var paramIds = (cmd.Parameters ?? new List<ServiceParamDefinitionDto>()).Select(p => p.ParameterId).Distinct().ToList();
+        if (paramIds.Count > 0)
+        {
+            var paramMap = await _parameters.GetByIdsAsMapAsync(paramIds, ct);
+            var missing = paramIds.Where(id => !paramMap.ContainsKey(id)).ToList();
+            if (missing.Count > 0)
+                return AppErrors.Common.Validation($"Параметр(ы) не найдены: {string.Join(", ", missing)}.");
+        }
 
         var parameters = (cmd.Parameters ?? new List<ServiceParamDefinitionDto>())
             .Select(p => new ServiceParamDefinition(cmd.Id, p.ParameterId, p.Required))

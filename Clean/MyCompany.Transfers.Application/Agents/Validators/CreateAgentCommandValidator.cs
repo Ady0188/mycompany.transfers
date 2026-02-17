@@ -10,5 +10,8 @@ public sealed class CreateAgentCommandValidator : AbstractValidator<CreateAgentC
         RuleFor(x => x.Id)
             .NotEmpty().WithMessage("Id обязателен.")
             .MaximumLength(64);
+        RuleFor(x => x.Account)
+            .NotEmpty().WithMessage("Счёт обязателен для проводок.")
+            .MaximumLength(128);
     }
 }

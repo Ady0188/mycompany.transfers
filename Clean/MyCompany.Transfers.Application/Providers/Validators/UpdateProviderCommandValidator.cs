@@ -8,6 +8,8 @@ public sealed class UpdateProviderCommandValidator : AbstractValidator<UpdatePro
     public UpdateProviderCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty().WithMessage("Id обязателен.").MaximumLength(64);
+        When(x => x.Account is not null, () =>
+            RuleFor(x => x.Account).NotEmpty().WithMessage("Счёт не может быть пустым.").MaximumLength(128));
         When(x => x.Name is not null, () =>
             RuleFor(x => x.Name).NotEmpty().WithMessage("Name не может быть пустым.").MaximumLength(128));
         When(x => x.BaseUrl is not null, () =>

@@ -21,6 +21,12 @@ public sealed class CachedServiceRepository : IServiceRepository
     public Task<Service?> GetForUpdateAsync(string serviceId, CancellationToken ct) =>
         _inner.GetForUpdateAsync(serviceId, ct);
 
+    public Task<bool> AnyByProviderIdAsync(string providerId, CancellationToken ct) =>
+        _inner.AnyByProviderIdAsync(providerId, ct);
+
+    public Task<bool> AnyByAccountDefinitionIdAsync(Guid accountDefinitionId, CancellationToken ct) =>
+        _inner.AnyByAccountDefinitionIdAsync(accountDefinitionId, ct);
+
     public async Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct) =>
         (await _cache.GetOrCreateAsync("service:all", async _ => (IReadOnlyList<Service>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Service>();
 

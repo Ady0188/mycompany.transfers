@@ -64,6 +64,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
         b.Entity<Agent>(eb =>
         {
             eb.HasKey(x => x.Id);
+            eb.Property(x => x.Account).IsRequired().HasMaxLength(128);
             eb.Property(x => x.Balances).HasConversion(dictConv).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb").Metadata.SetValueComparer(dictComparer);
             eb.Property(x => x.TimeZoneId).IsRequired().HasMaxLength(64).HasDefaultValue("Asia/Dushanbe");
             eb.Property(x => x.SettingsJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
@@ -135,6 +136,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
         {
             eb.HasKey(x => x.Id);
             eb.Property(x => x.Id).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.Account).IsRequired().HasMaxLength(128);
             eb.Property(x => x.Name).HasMaxLength(128).IsRequired();
             eb.Property(x => x.BaseUrl).HasMaxLength(512).IsRequired();
             eb.Property(x => x.TimeoutSeconds).HasDefaultValue(30);

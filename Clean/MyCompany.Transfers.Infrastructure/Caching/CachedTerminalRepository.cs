@@ -24,6 +24,9 @@ public sealed class CachedTerminalRepository : ITerminalRepository
     public Task<bool> ExistsAsync(string terminalId, CancellationToken ct) =>
         _cache.GetOrCreateAsync($"term:exists:{terminalId}", _ => _inner.ExistsAsync(terminalId, ct), Ttl, ct);
 
+    public Task<bool> AnyByAgentIdAsync(string agentId, CancellationToken ct) =>
+        _inner.AnyByAgentIdAsync(agentId, ct);
+
     public async Task<IReadOnlyList<Terminal>> GetAllAsync(CancellationToken ct) =>
         (await _cache.GetOrCreateAsync("term:all", async _ => (IReadOnlyList<Terminal>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Terminal>();
 

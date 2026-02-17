@@ -14,11 +14,27 @@ public sealed class ParameterRepository : IParameterRepository
     public async Task<IReadOnlyList<ParamDefinition>> GetAllAsync(CancellationToken ct) =>
         await _db.Parameters.AsNoTracking().Where(p => p.Active).OrderBy(p => p.Code).ToListAsync(ct);
 
+    public Task<IReadOnlyList<ParamDefinition>> GetAllForAdminAsync(CancellationToken ct) =>
+        _db.Parameters.AsNoTracking().OrderBy(p => p.Code).ToListAsync(ct).ContinueWith(t => (IReadOnlyList<ParamDefinition>)t.Result, ct);
+
     public Task<ParamDefinition?> GetByIdAsync(string id, CancellationToken ct) =>
         _db.Parameters.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id && p.Active, ct);
 
+    public Task<ParamDefinition?> GetForUpdateAsync(string id, CancellationToken ct) =>
+        _db.Parameters.SingleOrDefaultAsync(p => p.Id == id, ct);
+
     public Task<ParamDefinition?> GetByCodeAsync(string code, CancellationToken ct) =>
         _db.Parameters.AsNoTracking().SingleOrDefaultAsync(p => p.Code == code && p.Active, ct);
+
+    public Task<bool> ExistsAsync(string id, CancellationToken ct) =>
+        _db.Parameters.AnyAsync(p => p.Id == id, ct);
+
+    public Task<bool> AnyUsedByServiceAsync(string parameterId, CancellationToken ct) =>
+        _db.ServiceParamDefinitions.AnyAsync(x => x.ParameterId == parameterId, ct);
+
+    public void Add(ParamDefinition param) => _db.Parameters.Add(param);
+    public void Update(ParamDefinition param) => _db.Parameters.Update(param);
+    public void Remove(ParamDefinition param) => _db.Parameters.Remove(param);
 
     public async Task<Dictionary<string, ParamDefinition>> GetByIdsAsMapAsync(IEnumerable<string> ids, CancellationToken ct)
     {

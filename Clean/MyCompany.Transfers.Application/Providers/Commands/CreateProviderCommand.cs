@@ -9,6 +9,7 @@ namespace MyCompany.Transfers.Application.Providers.Commands;
 
 public sealed record CreateProviderCommand(
     string Id,
+    string Account,
     string Name,
     string BaseUrl,
     int TimeoutSeconds,
@@ -35,6 +36,7 @@ public sealed class CreateProviderCommandHandler : IRequestHandler<CreateProvide
 
         var provider = new Provider(
             cmd.Id,
+            cmd.Account,
             cmd.Name,
             cmd.BaseUrl,
             cmd.TimeoutSeconds,

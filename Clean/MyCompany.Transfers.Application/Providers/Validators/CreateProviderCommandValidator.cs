@@ -8,6 +8,7 @@ public sealed class CreateProviderCommandValidator : AbstractValidator<CreatePro
     public CreateProviderCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty().WithMessage("Id обязателен.").MaximumLength(64);
+        RuleFor(x => x.Account).NotEmpty().WithMessage("Счёт обязателен для проводок.").MaximumLength(128);
         RuleFor(x => x.Name).NotEmpty().WithMessage("Name обязателен.").MaximumLength(128);
         RuleFor(x => x.BaseUrl).NotEmpty().WithMessage("BaseUrl обязателен.").MaximumLength(512);
         RuleFor(x => x.TimeoutSeconds).InclusiveBetween(1, 300).WithMessage("TimeoutSeconds должен быть от 1 до 300.");

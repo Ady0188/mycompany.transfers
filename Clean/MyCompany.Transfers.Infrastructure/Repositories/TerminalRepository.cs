@@ -23,6 +23,9 @@ public sealed class TerminalRepository : ITerminalRepository
     public Task<bool> ExistsAsync(string terminalId, CancellationToken ct) =>
         _db.Terminals.AnyAsync(t => t.Id == terminalId, ct);
 
+    public Task<bool> AnyByAgentIdAsync(string agentId, CancellationToken ct) =>
+        _db.Terminals.AnyAsync(t => t.AgentId == agentId, ct);
+
     public Task<IReadOnlyList<Terminal>> GetAllAsync(CancellationToken ct) =>
         _db.Terminals.AsNoTracking().OrderBy(t => t.Id).ToListAsync(ct).ContinueWith(t => (IReadOnlyList<Terminal>)t.Result, ct);
 

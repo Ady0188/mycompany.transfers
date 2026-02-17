@@ -10,11 +10,13 @@ public sealed record DeleteServiceCommand(string Id) : IRequest<ErrorOr<Success>
 public sealed class DeleteServiceCommandHandler : IRequestHandler<DeleteServiceCommand, ErrorOr<Success>>
 {
     private readonly IServiceRepository _services;
+    private readonly IAccessRepository _access;
     private readonly IUnitOfWork _uow;
 
-    public DeleteServiceCommandHandler(IServiceRepository services, IUnitOfWork uow)
+    public DeleteServiceCommandHandler(IServiceRepository services, IAccessRepository access, IUnitOfWork uow)
     {
         _services = services;
+        _access = access;
         _uow = uow;
     }
 
@@ -23,6 +25,8 @@ public sealed class DeleteServiceCommandHandler : IRequestHandler<DeleteServiceC
         var service = await _services.GetForUpdateAsync(cmd.Id, ct);
         if (service is null)
             return AppErrors.Common.NotFound($"Услуга '{cmd.Id}' не найдена.");
+        if (await _access.AnyByServiceIdAsync(cmd.Id, ct))
+            return AppErrors.Common.Validation("Невозможно удалить услугу: существуют привязанные права доступа агентов.");
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
