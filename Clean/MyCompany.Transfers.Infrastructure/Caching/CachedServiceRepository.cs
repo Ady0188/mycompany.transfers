@@ -18,6 +18,16 @@ public sealed class CachedServiceRepository : IServiceRepository
     public Task<Service?> GetByIdAsync(string serviceId, CancellationToken ct) =>
         _cache.GetOrCreateAsync($"service:byid:{serviceId}", _ => _inner.GetByIdAsync(serviceId, ct), Ttl, ct);
 
+    public Task<Service?> GetForUpdateAsync(string serviceId, CancellationToken ct) =>
+        _inner.GetForUpdateAsync(serviceId, ct);
+
+    public async Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct) =>
+        (await _cache.GetOrCreateAsync("service:all", async _ => (IReadOnlyList<Service>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Service>();
+
+    public void Add(Service service) => _inner.Add(service);
+    public void Update(Service service) => _inner.Update(service);
+    public void Remove(Service service) => _inner.Remove(service);
+
     public async Task<(Service? Service, bool IsByPan)> GetByIdWithTypeAsync(string serviceId, CancellationToken ct)
     {
         var key = $"service:byid-withtype:{serviceId}";

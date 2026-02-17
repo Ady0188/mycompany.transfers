@@ -17,6 +17,16 @@ public sealed class ServiceRepository : IServiceRepository
     public Task<Service?> GetByIdAsync(string serviceId, CancellationToken ct) =>
         _db.Services.Include(s => s.Parameters).ThenInclude(p => p.Parameter).AsNoTracking().FirstOrDefaultAsync(s => s.Id == serviceId, ct);
 
+    public Task<Service?> GetForUpdateAsync(string serviceId, CancellationToken ct) =>
+        _db.Services.Include(s => s.Parameters).FirstOrDefaultAsync(s => s.Id == serviceId, ct);
+
+    public Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct) =>
+        _db.Services.Include(s => s.Parameters).AsNoTracking().OrderBy(s => s.Id).ToListAsync(ct).ContinueWith(t => (IReadOnlyList<Service>)t.Result, ct);
+
+    public void Add(Service service) => _db.Services.Add(service);
+    public void Update(Service service) => _db.Services.Update(service);
+    public void Remove(Service service) => _db.Services.Remove(service);
+
     public async Task<(Service? Service, bool IsByPan)> GetByIdWithTypeAsync(string serviceId, CancellationToken ct)
     {
         var service = await _db.Services.Include(s => s.Parameters).ThenInclude(p => p.Parameter)
