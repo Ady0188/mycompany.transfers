@@ -17,9 +17,7 @@ public static class ProviderRequestExtensions
             ["NumId"] = r.NumId,
             ["ExternalId"] = r.ExternalId,
             ["ServiceId"] = r.ServiceId,
-            // для совместимости можно использовать оба ключа
             ["ProviderServiceId"] = r.ProviderServiceId,
-            ["ProviderServicveId"] = r.ProviderServiceId,
             ["Account"] = r.Account,
             ["CreditAmount"] = r.CreditAmount,
             ["CreditCurrency"] = new Currency(r.CurrencyIsoCode),
