@@ -39,18 +39,17 @@ public sealed class CreateServiceCommandHandler : IRequestHandler<CreateServiceC
             .Select(p => new ServiceParamDefinition(cmd.Id, p.ParameterId, p.Required))
             .ToList();
 
-        var service = new Service(
+        var service = Service.Create(
             cmd.Id,
             cmd.ProviderId,
+            cmd.ProviderServiceId ?? cmd.Id,
             cmd.Name,
             cmd.AllowedCurrencies ?? Array.Empty<string>(),
             cmd.MinAmountMinor,
             cmd.MaxAmountMinor,
             cmd.FxRounding,
+            cmd.AccountDefinitionId,
             parameters);
-
-        service.GetType().GetProperty("ProviderServiceId")!.SetValue(service, cmd.ProviderServiceId ?? cmd.Id);
-        service.GetType().GetProperty("AccountDefinitionId")!.SetValue(service, cmd.AccountDefinitionId);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {

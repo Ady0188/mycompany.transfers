@@ -28,16 +28,10 @@ public sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentComma
         if (await _agents.ExistsAsync(m.Id, ct))
             return AppErrors.Common.Validation($"Агент '{m.Id}' уже существует.");
 
-        Agent agent = new(m.Id)
-        {
-            TimeZoneId = string.IsNullOrWhiteSpace(m.TimeZoneId) ? "Asia/Dushanbe" : m.TimeZoneId,
-        };
+        Agent agent = Agent.Create(m.Id, m.TimeZoneId, m.SettingsJson);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            if (!string.IsNullOrWhiteSpace(m.SettingsJson))
-                agent.GetType().GetProperty("SettingsJson")!.SetValue(agent, m.SettingsJson);
-
             _agents.Add(agent);
             return Task.FromResult(true);
         }, ct);

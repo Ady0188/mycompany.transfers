@@ -38,28 +38,9 @@ public sealed class UpdateServiceCommandHandler : IRequestHandler<UpdateServiceC
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            if (cmd.ProviderId is not null)
-                service.GetType().GetProperty("ProviderId")!.SetValue(service, cmd.ProviderId);
-            if (cmd.ProviderServiceId is not null)
-                service.GetType().GetProperty("ProviderServiceId")!.SetValue(service, cmd.ProviderServiceId);
-            if (cmd.Name is not null)
-                service.GetType().GetProperty("Name")!.SetValue(service, cmd.Name);
-            if (cmd.AllowedCurrencies is not null)
-                service.GetType().GetProperty("AllowedCurrencies")!.SetValue(service, cmd.AllowedCurrencies);
-            if (cmd.FxRounding is not null)
-                service.GetType().GetProperty("FxRounding")!.SetValue(service, cmd.FxRounding);
-            if (cmd.MinAmountMinor.HasValue)
-                service.GetType().GetProperty("MinAmountMinor")!.SetValue(service, cmd.MinAmountMinor.Value);
-            if (cmd.MaxAmountMinor.HasValue)
-                service.GetType().GetProperty("MaxAmountMinor")!.SetValue(service, cmd.MaxAmountMinor.Value);
-            if (cmd.AccountDefinitionId.HasValue)
-                service.GetType().GetProperty("AccountDefinitionId")!.SetValue(service, cmd.AccountDefinitionId.Value);
-            if (cmd.Parameters is not null)
-            {
-                service.Parameters.Clear();
-                foreach (var p in cmd.Parameters)
-                    service.Parameters.Add(new ServiceParamDefinition(service.Id, p.ParameterId, p.Required));
-            }
+            var newParams = cmd.Parameters?.Select(p => new ServiceParamDefinition(service.Id, p.ParameterId, p.Required)).ToList();
+            service.UpdateProfile(cmd.ProviderId, cmd.ProviderServiceId, cmd.Name, cmd.AllowedCurrencies,
+                cmd.MinAmountMinor, cmd.MaxAmountMinor, cmd.FxRounding, cmd.AccountDefinitionId, newParams);
             _services.Update(service);
             return Task.FromResult(true);
         }, ct);

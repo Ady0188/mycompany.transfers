@@ -16,7 +16,7 @@ public sealed class Provider
 
     private Provider() { }
 
-    public Provider(string id, string name, string baseUrl, int timeoutSeconds, ProviderAuthType authType, string settingsJson, bool isEnabled = true)
+    public Provider(string id, string name, string baseUrl, int timeoutSeconds, ProviderAuthType authType, string settingsJson, bool isEnabled = true, int feePermille = 0)
     {
         Id = id;
         Name = name;
@@ -25,6 +25,22 @@ public sealed class Provider
         AuthType = authType;
         SettingsJson = settingsJson;
         IsEnabled = isEnabled;
+        FeePermille = feePermille;
+    }
+
+    /// <summary>
+    /// Обновление профиля провайдера. Переданные непустые значения заменяют текущие.
+    /// </summary>
+    public void UpdateProfile(string? name = null, string? baseUrl = null, int? timeoutSeconds = null,
+        ProviderAuthType? authType = null, string? settingsJson = null, bool? isEnabled = null, int? feePermille = null)
+    {
+        if (!string.IsNullOrWhiteSpace(name)) Name = name;
+        if (!string.IsNullOrWhiteSpace(baseUrl)) BaseUrl = baseUrl;
+        if (timeoutSeconds.HasValue) TimeoutSeconds = timeoutSeconds.Value;
+        if (authType.HasValue) AuthType = authType.Value;
+        if (!string.IsNullOrWhiteSpace(settingsJson)) SettingsJson = settingsJson;
+        if (isEnabled.HasValue) IsEnabled = isEnabled.Value;
+        if (feePermille.HasValue) FeePermille = feePermille.Value;
     }
 
     public void Disable() => IsEnabled = false;

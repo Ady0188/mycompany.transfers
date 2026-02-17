@@ -36,26 +36,7 @@ public sealed class UpdateProviderCommandHandler : IRequestHandler<UpdateProvide
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            if (cmd.Name is not null)
-                provider.GetType().GetProperty("Name")!.SetValue(provider, cmd.Name);
-            if (cmd.BaseUrl is not null)
-                provider.GetType().GetProperty("BaseUrl")!.SetValue(provider, cmd.BaseUrl);
-            if (cmd.TimeoutSeconds.HasValue)
-                provider.GetType().GetProperty("TimeoutSeconds")!.SetValue(provider, cmd.TimeoutSeconds.Value);
-            if (cmd.AuthType.HasValue)
-                provider.GetType().GetProperty("AuthType")!.SetValue(provider, cmd.AuthType.Value);
-            if (cmd.SettingsJson is not null)
-                provider.UpdateSettings(cmd.SettingsJson);
-            if (cmd.IsEnabled.HasValue)
-            {
-                if (cmd.IsEnabled.Value)
-                    provider.Enable();
-                else
-                    provider.Disable();
-            }
-            if (cmd.FeePermille.HasValue)
-                provider.GetType().GetProperty("FeePermille")!.SetValue(provider, cmd.FeePermille.Value);
-
+            provider.UpdateProfile(cmd.Name, cmd.BaseUrl, cmd.TimeoutSeconds, cmd.AuthType, cmd.SettingsJson, cmd.IsEnabled, cmd.FeePermille);
             _providers.Update(provider);
             return Task.FromResult(true);
         }, ct);

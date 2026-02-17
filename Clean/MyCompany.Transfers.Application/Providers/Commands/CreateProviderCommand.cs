@@ -40,13 +40,11 @@ public sealed class CreateProviderCommandHandler : IRequestHandler<CreateProvide
             cmd.TimeoutSeconds,
             cmd.AuthType,
             cmd.SettingsJson ?? "{}",
-            cmd.IsEnabled);
+            cmd.IsEnabled,
+            cmd.FeePermille);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            if (cmd.FeePermille > 0)
-                provider.GetType().GetProperty("FeePermille")!.SetValue(provider, cmd.FeePermille);
-
             _providers.Add(provider);
             return Task.FromResult(true);
         }, ct);

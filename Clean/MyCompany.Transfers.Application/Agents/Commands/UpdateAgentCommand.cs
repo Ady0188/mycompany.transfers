@@ -30,10 +30,7 @@ public sealed class UpdateAgentCommandHandler : IRequestHandler<UpdateAgentComma
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            agent.TimeZoneId = string.IsNullOrWhiteSpace(m.TimeZoneId) ? agent.TimeZoneId : m.TimeZoneId;
-            if (!string.IsNullOrWhiteSpace(m.SettingsJson))
-                agent.GetType().GetProperty("SettingsJson")!.SetValue(agent, m.SettingsJson);
-
+            agent.UpdateProfile(m.TimeZoneId, m.SettingsJson);
             _agents.Update(agent);
             return Task.FromResult(true);
         }, ct);
