@@ -14,4 +14,20 @@ public sealed class CachedTerminalRepository : ITerminalRepository
 
     public Task<Terminal?> GetByApiKeyAsync(string apiKey, CancellationToken ct) =>
         _cache.GetOrCreateAsync($"term:apikey:{apiKey}", _ => _inner.GetByApiKeyAsync(apiKey, ct), Ttl, ct);
+
+    public Task<Terminal?> GetAsync(string terminalId, CancellationToken ct) =>
+        _cache.GetOrCreateAsync($"term:id:{terminalId}", _ => _inner.GetAsync(terminalId, ct), Ttl, ct);
+
+    public Task<Terminal?> GetForUpdateAsync(string terminalId, CancellationToken ct) =>
+        _inner.GetForUpdateAsync(terminalId, ct);
+
+    public Task<bool> ExistsAsync(string terminalId, CancellationToken ct) =>
+        _cache.GetOrCreateAsync($"term:exists:{terminalId}", _ => _inner.ExistsAsync(terminalId, ct), Ttl, ct);
+
+    public async Task<IReadOnlyList<Terminal>> GetAllAsync(CancellationToken ct) =>
+        (await _cache.GetOrCreateAsync("term:all", async _ => (IReadOnlyList<Terminal>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Terminal>();
+
+    public void Add(Terminal terminal) => _inner.Add(terminal);
+    public void Update(Terminal terminal) => _inner.Update(terminal);
+    public void Remove(Terminal terminal) => _inner.Remove(terminal);
 }
