@@ -7,42 +7,82 @@ namespace MyCompany.Transfers.Infrastructure.Helpers;
 
 public static class ProviderRequestExtensions
 {
-    public static Dictionary<string, object?> BuildReplacements(this ProviderRequest r)
+    private static Dictionary<string, object?> GetReplacement(ProviderRequest r)
     {
-        var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        var dateTime = new DateTimeInfo(r.TransferDateTime);
+
+        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["TransferId"] = r.TransferId,
             ["NumId"] = r.NumId,
             ["ExternalId"] = r.ExternalId,
             ["ServiceId"] = r.ServiceId,
+            // для совместимости можно использовать оба ключа
             ["ProviderServiceId"] = r.ProviderServiceId,
+            ["ProviderServicveId"] = r.ProviderServiceId,
             ["Account"] = r.Account,
             ["CreditAmount"] = r.CreditAmount,
-            ["ProviderFee"] = r.ProviderFee,
-            ["CreditCurrency"] = r.CurrencyIsoCode,
+            ["CreditCurrency"] = new Currency(r.CurrencyIsoCode),
             ["Source"] = r.Source,
+            ["DateTime"] = dateTime.Local,
             ["Proc"] = r.Proc,
-            ["DateTime"] = r.TransferDateTime.ToString("O", CultureInfo.InvariantCulture)
+            ["ProviderFee"] = r.ProviderFee
         };
+    }
+
+    private static void AddParam(Dictionary<string, object?> dict, string key, string? value)
+    {
+        if (key.StartsWith("sender_citizenship", StringComparison.OrdinalIgnoreCase))
+        {
+            dict["Param." + key] = new Country(value ?? string.Empty);
+        }
+        else if (key.StartsWith("sender_doc_issue_date", StringComparison.OrdinalIgnoreCase) ||
+                 key.StartsWith("sender_birth_date", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                dict["Param." + key] = DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            dict["Param." + key] = value;
+        }
+    }
+
+    public static Dictionary<string, object?> BuildReplacements(this ProviderRequest r)
+    {
+        var dict = GetReplacement(r);
 
         if (r.Parameters is not null)
         {
             foreach (var kv in r.Parameters)
-                dict["Param." + kv.Key] = kv.Value;
+                AddParam(dict, kv.Key, kv.Value);
         }
+
         if (r.ProvReceivedParams is not null)
         {
             foreach (var kv in r.ProvReceivedParams)
-                dict["Param." + kv.Key] = kv.Value;
+                AddParam(dict, kv.Key, kv.Value);
         }
+
         return dict;
     }
 
     public static Dictionary<string, object?> BuildReplacements(this ProviderRequest r, Dictionary<string, string> extra)
     {
-        var dict = r.BuildReplacements();
-        foreach (var kv in extra)
-            dict[kv.Key] = kv.Value;
+        var dict = GetReplacement(r);
+
+        if (extra is not null)
+        {
+            foreach (var kv in extra)
+                AddParam(dict, kv.Key, kv.Value);
+        }
+
+        if (r.ProvReceivedParams is not null)
+        {
+            foreach (var kv in r.ProvReceivedParams)
+                AddParam(dict, kv.Key, kv.Value);
+        }
+
         return dict;
     }
 
@@ -176,5 +216,23 @@ public static class ProviderRequestExtensions
             });
 
         return res;
+    }
+
+    /// <summary>
+    /// Локальное время/UTC для шаблонов провайдеров (как в оригинальном DateTimeInfo).
+    /// </summary>
+    private sealed class DateTimeInfo
+    {
+        public DateTimeInfo(DateTimeOffset utcDateTime, string timeZoneId = "Asia/Dushanbe")
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            var localDateTime = TimeZoneInfo.ConvertTime(utcDateTime, tz);
+
+            Utc = utcDateTime.ToUniversalTime().DateTime;
+            Local = localDateTime.DateTime;
+        }
+
+        public DateTime Utc { get; }
+        public DateTime Local { get; }
     }
 }
