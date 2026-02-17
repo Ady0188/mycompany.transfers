@@ -7,6 +7,7 @@ using MyCompany.Transfers.Infrastructure.Caching;
 using MyCompany.Transfers.Infrastructure.Persistence;
 using MyCompany.Transfers.Infrastructure.Providers;
 using MyCompany.Transfers.Infrastructure.Repositories;
+using MyCompany.Transfers.Infrastructure.Workers;
 using Npgsql;
 
 namespace MyCompany.Transfers.Infrastructure;
@@ -84,6 +85,8 @@ public static class DependencyInjection
             handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
             return handler;
         });
+
+        services.AddHostedService<ProviderSenderWorker>();
 
         return services;
     }
