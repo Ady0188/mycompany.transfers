@@ -93,7 +93,9 @@ public static class TillabuyExtensions
                 return Encoding.GetEncoding("windows-1251").GetString(decryptedData);
             }
 
+#pragma warning disable SYSLIB0057
             var cert = new X509Certificate2(privateKeyPath, privateKeyPass ?? "", X509KeyStorageFlags.Exportable);
+#pragma warning restore SYSLIB0057
             using var rsaCert = cert.GetRSAPrivateKey();
             if (rsaCert is null)
                 return Error.Conflict("9", "Не удалось получить закрытый ключ из сертификата");

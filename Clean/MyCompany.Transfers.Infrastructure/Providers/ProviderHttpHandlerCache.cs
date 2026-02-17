@@ -35,7 +35,9 @@ public sealed class ProviderHttpHandlerCache : IProviderHttpHandlerCache
             var handler = new HttpClientHandler();
             if (!string.IsNullOrEmpty(certPath) && !string.IsNullOrEmpty(certPass))
             {
+#pragma warning disable SYSLIB0057
                 var certificate = new X509Certificate2(certPath, certPass);
+#pragma warning restore SYSLIB0057
                 handler.ClientCertificates.Add(certificate);
             }
 
@@ -44,7 +46,9 @@ public sealed class ProviderHttpHandlerCache : IProviderHttpHandlerCache
                 handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
                 {
                     if (cert is null || chain is null) return false;
+#pragma warning disable SYSLIB0057
                     chain.ChainPolicy.ExtraStore.Add(new X509Certificate2(verificationCertPath));
+#pragma warning restore SYSLIB0057
                     chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                     chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
                     return chain.Build(cert);
