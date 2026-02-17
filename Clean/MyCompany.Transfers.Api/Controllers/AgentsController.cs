@@ -1,0 +1,63 @@
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
+using MyCompany.Transfers.Application.Agents.Commands;
+using MyCompany.Transfers.Application.Agents.Dtos;
+using MyCompany.Transfers.Application.Agents.Queries;
+using MyCompany.Transfers.Api.Auth;
+
+namespace MyCompany.Transfers.Api.Controllers;
+
+/// <summary>
+/// Административный CRUD для справочника агентов.
+/// </summary>
+[ApiController]
+[Route("api/admin/agents")]
+[Consumes("application/json")]
+[Produces("application/json", "application/problem+json")]
+[ApiExplorerSettings(GroupName = "admin")]
+[AdminRoleAuthorize] // Авторизация через JWT Bearer токен с ролями
+public sealed class AgentsController : BaseController
+{
+    private readonly ISender _mediator;
+
+    public AgentsController(ISender mediator) => _mediator = mediator;
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll(CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetAgentsQuery(), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(string id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetAgentByIdQuery(id), ct);
+        return result.Match(a => Ok(AgentAdminDto.FromDomain(a)), Problem);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] AgentAdminDto dto, CancellationToken ct)
+    {
+        var cmd = new CreateAgentCommand(dto.Id, dto.TimeZoneId, dto.SettingsJson);
+        var result = await _mediator.Send(cmd, ct);
+        return result.Match(created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created), Problem);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] AgentAdminDto dto, CancellationToken ct)
+    {
+        var cmd = new UpdateAgentCommand(id, dto.TimeZoneId, dto.SettingsJson);
+        var result = await _mediator.Send(cmd, ct);
+        return result.Match(updated => Ok(updated), Problem);
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    {
+        var cmd = new DeleteAgentCommand(id);
+        var result = await _mediator.Send(cmd, ct);
+        return result.Match(_ => NoContent(), Problem);
+    }
+}
+

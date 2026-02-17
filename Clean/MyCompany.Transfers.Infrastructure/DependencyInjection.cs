@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ICurrencyConverter, CurrencyConverter>();
 
         services.AddScoped<AgentRepository>();
+        services.AddScoped<IAgentRepository>(sp => sp.GetRequiredService<AgentRepository>());
         services.AddScoped<IAgentReadRepository>(sp =>
             new CachedAgentReadRepository(sp.GetRequiredService<AgentRepository>(), sp.GetRequiredService<ICacheService>()));
 

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MyCompany.Transfers.Infrastructure.Repositories;
 
-public sealed class AgentRepository : IAgentReadRepository
+public sealed class AgentRepository : IAgentRepository
 {
     private readonly AppDbContext _db;
 
@@ -42,4 +42,13 @@ public sealed class AgentRepository : IAgentReadRepository
         if (agent is null) return null;
         return agent.Balances.TryGetValue(currency, out var v) ? v : 0L;
     }
+
+    public async Task<IReadOnlyList<Agent>> GetAllAsync(CancellationToken ct) =>
+        await _db.Agents.AsNoTracking().OrderBy(a => a.Id).ToListAsync(ct);
+
+    public void Add(Agent agent) => _db.Agents.Add(agent);
+
+    public void Update(Agent agent) => _db.Agents.Update(agent);
+
+    public void Remove(Agent agent) => _db.Agents.Remove(agent);
 }

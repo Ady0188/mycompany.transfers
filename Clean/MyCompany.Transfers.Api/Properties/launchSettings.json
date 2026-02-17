@@ -6,7 +6,9 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:55474;http://localhost:55475"
+      "applicationUrl": "https://localhost:55474;http://localhost:55475",
+      "windowsAuthentication": true,
+      "anonymousAuthentication": false
     }
   }
 }
