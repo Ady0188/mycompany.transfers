@@ -1,11 +1,16 @@
-<MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+<MudNavMenu Class="py-4">
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Inherit">
         Главная
     </MudNavLink>
-    <MudNavLink Href="counter" Icon="@Icons.Material.Filled.Add">
-        Counter
-    </MudNavLink>
-    <MudNavLink Href="weather" Icon="@Icons.Material.Filled.Cloud">
-        Weather
-    </MudNavLink>
+    <MudNavGroup Title="Справочники" Icon="@Icons.Material.Filled.MenuBook" IconColor="Color.Inherit" Expanded="true">
+        <MudNavLink Href="agents" Icon="@Icons.Material.Filled.People" IconColor="Color.Inherit">Агенты</MudNavLink>
+        <MudNavLink Href="providers" Icon="@Icons.Material.Filled.Business" IconColor="Color.Inherit">Провайдеры</MudNavLink>
+        <MudNavLink Href="services" Icon="@Icons.Material.Filled.Category" IconColor="Color.Inherit">Услуги</MudNavLink>
+        <MudNavLink Href="terminals" Icon="@Icons.Material.Filled.Devices" IconColor="Color.Inherit">Терминалы</MudNavLink>
+        <MudNavLink Href="parameters" Icon="@Icons.Material.Filled.Tune" IconColor="Color.Inherit">Параметры</MudNavLink>
+        <MudNavLink Href="account-definitions" Icon="@Icons.Material.Filled.AccountBalance" IconColor="Color.Inherit">Определения счетов</MudNavLink>
+        <MudNavLink Href="access-services" Icon="@Icons.Material.Filled.Link" IconColor="Color.Inherit">Доступы (услуги)</MudNavLink>
+        <MudNavLink Href="access-currencies" Icon="@Icons.Material.Filled.AttachMoney" IconColor="Color.Inherit">Доступы (валюты)</MudNavLink>
+        <MudNavLink Href="fx-rates" Icon="@Icons.Material.Filled.CurrencyExchange" IconColor="Color.Inherit">Курсы валют</MudNavLink>
+    </MudNavGroup>
 </MudNavMenu>

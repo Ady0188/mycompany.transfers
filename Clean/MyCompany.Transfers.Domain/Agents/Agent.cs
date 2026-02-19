@@ -12,7 +12,6 @@ public sealed class Agent : IAggregateRoot
     public string SettingsJson { get; private set; } = "{}";
 
     private Agent() { }
-    ,,,,
 
     private Agent(string id, string account, string timeZoneId, string settingsJson)
     {

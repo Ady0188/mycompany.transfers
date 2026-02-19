@@ -1,7 +1,40 @@
-﻿@page "/"
+@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Главная — Админ-панель</PageTitle>
 
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+<MudContainer Class="mt-4" MaxWidth="MaxWidth.Large">
+    <MudText Typo="Typo.h4" Class="mb-4 font-weight-medium" GutterBottom="true">
+        Добро пожаловать
+    </MudText>
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2" Class="pa-4">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudAvatar Color="Color.Primary" Size="Size.Large">
+                            <MudIcon Icon="@Icons.Material.Filled.Settings" />
+                        </MudAvatar>
+                        <MudStack Class="ms-3">
+                            <MudText Typo="Typo.h6">MyCompany Transfers</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Административная панель</MudText>
+                        </MudStack>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Управление справочниками: агенты, провайдеры, услуги, терминалы, параметры, определения счетов, права доступа и курсы валют.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2" Class="pa-4 fill-height" Style="background: linear-gradient(135deg, rgba(21, 101, 192, 0.08) 0%, rgba(0, 172, 193, 0.06) 100%);">
+                <MudCardContent>
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Primary" Class="mb-2" />
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-medium mb-2">Быстрый старт</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Используйте меню слева для перехода к разделам. Для работы с API необходим JWT-токен с правами администратора.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
