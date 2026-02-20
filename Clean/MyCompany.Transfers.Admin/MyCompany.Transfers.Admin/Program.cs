@@ -15,6 +15,7 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<AuthHeaderHandler>();
 builder.Services.AddScoped<IAgentsApiService, AgentsApiService>();
+builder.Services.AddScoped<IProvidersApiService, ProvidersApiService>();
 builder.Services.AddHttpClient("Api", (sp, client) =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
