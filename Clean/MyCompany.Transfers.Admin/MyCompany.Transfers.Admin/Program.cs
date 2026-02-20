@@ -14,6 +14,7 @@ builder.Services.AddMudServices();
 // Авторизация: только логин через AD, токен в localStorage.
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<AuthHeaderHandler>();
+builder.Services.AddScoped<IAgentsApiService, AgentsApiService>();
 builder.Services.AddHttpClient("Api", (sp, client) =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();

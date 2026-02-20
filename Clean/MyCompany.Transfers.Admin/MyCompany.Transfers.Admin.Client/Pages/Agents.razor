@@ -1,6 +1,119 @@
 @page "/agents"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAgentsApiService Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Агенты — Админ-панель</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Агенты</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">Справочник агентов. CRUD: api/admin/agents</MudText>
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4" GutterBottom="false">Агенты</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">
+            Добавить
+        </MudButton>
+    </MudStack>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+    }
+
+    <MudCard Elevation="2">
+        <MudTable Items="@_list" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true" Height="400px">
+            <HeaderContent>
+                <MudTh>Id</MudTh>
+                <MudTh>Счёт</MudTh>
+                <MudTh>Часовой пояс</MudTh>
+                <MudTh>Настройки (JSON)</MudTh>
+                <MudTh Style="width: 120px;">Действия</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Id">@context.Id</MudTd>
+                <MudTd DataLabel="Счёт">@context.Account</MudTd>
+                <MudTd DataLabel="Часовой пояс">@context.TimeZoneId</MudTd>
+                <MudTd DataLabel="Настройки">@(string.IsNullOrEmpty(context.SettingsJson) ? "—" : (context.SettingsJson.Length > 50 ? context.SettingsJson[..50] + "…" : context.SettingsJson))</MudTd>
+                <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudCard>
+</MudStack>
+
+@code {
+    private List<AgentAdminDto> _list = new();
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _list = await Api.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenCreate()
+    {
+        var dto = new AgentAdminDto { Id = "", Account = "", TimeZoneId = "UTC", SettingsJson = "" };
+        var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AgentEditDialog>("Новый агент", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task OpenEdit(AgentAdminDto item)
+    {
+        var copy = new AgentAdminDto { Id = item.Id, Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "" };
+        var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AgentEditDialog>("Изменить агента", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task ConfirmDelete(AgentAdminDto item)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"Удалить агента «{item.Id}»?",
+            ["ButtonText"] = "Удалить",
+            ["Color"] = Color.Error
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            var (success, error) = await Api.DeleteAsync(item.Id);
+            if (success)
+            {
+                Snackbar.Add("Агент удалён.", Severity.Success);
+                await LoadAsync();
+            }
+            else
+                Snackbar.Add(error ?? "Ошибка удаления", Severity.Error);
+        }
+    }
+}

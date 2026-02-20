@@ -1,0 +1,75 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAgentsApiService Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_model" OnValidSubmit="Submit">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_model.Id" Label="Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id"
+                             ReadOnly="!_isCreate" Immediate="true" />
+                <MudTextField @bind-Value="_model.Account" Label="Счёт" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
+                <MudTextField @bind-Value="_model.TimeZoneId" Label="Часовой пояс (например UTC)" Variant="Variant.Outlined" Immediate="true" />
+                <MudTextField @bind-Value="_model.SettingsJson" Label="Настройки (JSON)" Variant="Variant.Outlined" Lines="3" Immediate="true" />
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+                }
+                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                    <MudButton OnClick="Cancel">Отмена</MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                        @(_sending ? "Сохранение…" : "Сохранить")
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public AgentAdminDto Model { get; set; } = null!;
+    [Parameter] public bool IsCreate { get; set; }
+
+    private AgentAdminDto _model = null!;
+    private bool _isCreate;
+    private bool _sending;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _model = new AgentAdminDto { Id = Model.Id, Account = Model.Account, TimeZoneId = Model.TimeZoneId ?? "UTC", SettingsJson = Model.SettingsJson ?? "" };
+        _isCreate = IsCreate;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _error = null;
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            var (success, err) = _isCreate
+                ? await Api.CreateAsync(_model)
+                : await Api.UpdateAsync(_model.Id, _model);
+            if (success)
+            {
+                Snackbar.Add(_isCreate ? "Агент создан." : "Агент обновлён.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _error = err ?? "Ошибка сохранения";
+            }
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+}
