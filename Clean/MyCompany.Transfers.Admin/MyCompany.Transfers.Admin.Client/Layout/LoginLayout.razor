@@ -1,0 +1,14 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Themes
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="AdminTheme.Theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout Class="fill-height">
+    <MudMainContent Class="d-flex align-center justify-center pa-4" Style="min-height: 100vh; background: linear-gradient(135deg, #0d2137 0%, #1565c0 50%, #0a1929 100%);">
+        @Body
+    </MudMainContent>
+</MudLayout>

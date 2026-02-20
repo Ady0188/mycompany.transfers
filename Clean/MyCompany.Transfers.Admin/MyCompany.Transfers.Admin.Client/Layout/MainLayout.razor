@@ -1,8 +1,9 @@
 @using MudBlazor
 @using MyCompany.Transfers.Admin.Client.Themes
+@using MyCompany.Transfers.Admin.Client.Services
 @inherits LayoutComponentBase
-
-
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
 
 <MudThemeProvider Theme="AdminTheme.Theme" />
 <MudPopoverProvider />
@@ -15,12 +16,15 @@
         <MudText Typo="Typo.h6" Class="ml-3 font-weight-medium">MyCompany Transfers</MudText>
         <MudSpacer />
         <MudText Typo="Typo.body2" Class="mr-4 opacity-90">Админ-панель</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" OnClick="Logout" title="Выход" />
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Variant="DrawerVariant.Persistent" Class="admin-drawer">
         <NavMenu />
     </MudDrawer>
     <MudMainContent Class="admin-main">
-        @Body
+        <MudContainer Class="mt-4" MaxWidth="MaxWidth.False">
+            @Body
+        </MudContainer>
     </MudMainContent>
 </MudLayout>
 
@@ -32,6 +36,25 @@
 
 @code {
     private bool _drawerOpen = true;
+    private bool _authChecked;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_authChecked) return;
+        var isAuth = await AuthService.IsAuthenticatedAsync();
+        _authChecked = true;
+        if (!isAuth)
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+    }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login", true);
+    }
 }

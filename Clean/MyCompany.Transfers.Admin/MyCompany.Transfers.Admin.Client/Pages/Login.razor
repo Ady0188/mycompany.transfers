@@ -1,0 +1,86 @@
+@page "/login"
+@layout LoginLayout
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Вход — Админ-панель</PageTitle>
+
+<MudCard Class="mx-auto" Style="max-width: 400px;" Elevation="8">
+    <MudCardContent Class="pa-6">
+        <MudStack Spacing="4">
+            <MudText Typo="Typo.h5" Align="Align.Center" Class="font-weight-medium">MyCompany Transfers</MudText>
+            <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">Вход в админ-панель (Active Directory)</MudText>
+            <EditForm Model="_model" OnValidSubmit="OnSubmit" FormName="login">
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_model.Login"
+                                  Label="Логин"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  RequiredError="Введите логин"
+                                  Immediate="true" />
+                    <MudTextField @bind-Value="_model.Password"
+                                  Label="Пароль"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password"
+                                  Required="true"
+                                  RequiredError="Введите пароль"
+                                  Immediate="true" />
+                    @if (!string.IsNullOrEmpty(_error))
+                    {
+                        <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+                    }
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Disabled="_loading"
+                               Class="mt-2">
+                        @if (_loading)
+                        { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+                        else
+                        { <span>Войти</span> }
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private readonly LoginModel _model = new();
+    private string? _error;
+    private bool _loading;
+
+    private async Task OnSubmit()
+    {
+        _error = null;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var (success, error) = await AuthService.LoginAsync(_model.Login!, _model.Password!);
+            if (success)
+            {
+                Snackbar.Add("Вход выполнен.", Severity.Success);
+                Navigation.NavigateTo("/", true);
+            }
+            else
+            {
+                _error = error ?? "Ошибка входа.";
+            }
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        public string? Login { get; set; }
+        public string? Password { get; set; }
+    }
+}
