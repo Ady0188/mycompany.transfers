@@ -12,21 +12,19 @@
         <MudStack Spacing="4">
             <MudText Typo="Typo.h5" Align="Align.Center" Class="font-weight-medium">MyCompany Transfers</MudText>
             <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">Вход в админ-панель (Active Directory)</MudText>
-            <EditForm Model="_model" OnValidSubmit="OnSubmit" FormName="login">
+            <EditForm OnValidSubmit="OnSubmit" FormName="login">
                 <MudStack Spacing="3">
-                    <MudTextField @bind-Value="_model.Login"
+                    <MudTextField @bind-Value="_login"
                                   Label="Логин"
                                   Variant="Variant.Outlined"
                                   Required="true"
-                                  RequiredError="Введите логин"
-                                  Immediate="true" />
-                    <MudTextField @bind-Value="_model.Password"
+                                  RequiredError="Введите логин" />
+                    <MudTextField @bind-Value="_password"
                                   Label="Пароль"
                                   Variant="Variant.Outlined"
                                   InputType="InputType.Password"
                                   Required="true"
-                                  RequiredError="Введите пароль"
-                                  Immediate="true" />
+                                  RequiredError="Введите пароль" />
                     @if (!string.IsNullOrEmpty(_error))
                     {
                         <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
@@ -49,7 +47,8 @@
 </MudCard>
 
 @code {
-    private readonly LoginModel _model = new();
+    private string _login = "";
+    private string _password = "";
     private string? _error;
     private bool _loading;
 
@@ -60,7 +59,7 @@
         StateHasChanged();
         try
         {
-            var (success, error) = await AuthService.LoginAsync(_model.Login!, _model.Password!);
+            var (success, error) = await AuthService.LoginAsync(_login.Trim(), _password);
             if (success)
             {
                 Snackbar.Add("Вход выполнен.", Severity.Success);
@@ -76,11 +75,5 @@
             _loading = false;
             StateHasChanged();
         }
-    }
-
-    private sealed class LoginModel
-    {
-        public string? Login { get; set; }
-        public string? Password { get; set; }
     }
 }
