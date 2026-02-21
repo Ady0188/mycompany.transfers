@@ -1,5 +1,6 @@
 @page "/login"
 @layout LoginLayout
+
 @using MyCompany.Transfers.Admin.Client.Services
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
@@ -12,14 +13,15 @@
         <MudStack Spacing="4">
             <MudText Typo="Typo.h5" Align="Align.Center" Class="font-weight-medium">MyCompany Transfers</MudText>
             <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">Вход в админ-панель (Active Directory)</MudText>
-            <EditForm OnValidSubmit="OnSubmit" FormName="login">
+            <EditForm Model="_model" OnValidSubmit="OnSubmit" FormName="login">
                 <MudStack Spacing="3">
-                    <MudTextField @bind-Value="_login"
+                    <MudTextField @bind-Value="_model.Login"
                                   Label="Логин"
                                   Variant="Variant.Outlined"
                                   Required="true"
-                                  RequiredError="Введите логин" />
-                    <MudTextField @bind-Value="_password"
+                                  RequiredError="Введите логин"
+                                  Immediate />
+                    <MudTextField @bind-Value="_model.Password"
                                   Label="Пароль"
                                   Variant="Variant.Outlined"
                                   InputType="InputType.Password"
@@ -47,8 +49,7 @@
 </MudCard>
 
 @code {
-    private string _login = "";
-    private string _password = "";
+    private readonly LoginModel _model = new();
     private string? _error;
     private bool _loading;
 
@@ -59,7 +60,7 @@
         StateHasChanged();
         try
         {
-            var (success, error) = await AuthService.LoginAsync(_login.Trim(), _password);
+            var (success, error) = await AuthService.LoginAsync(_model.Login?.Trim() ?? "", _model.Password ?? "");
             if (success)
             {
                 Snackbar.Add("Вход выполнен.", Severity.Success);
@@ -75,5 +76,11 @@
             _loading = false;
             StateHasChanged();
         }
+    }
+
+    private sealed class LoginModel
+    {
+        public string Login { get; set; } = "";
+        public string Password { get; set; } = "";
     }
 }
