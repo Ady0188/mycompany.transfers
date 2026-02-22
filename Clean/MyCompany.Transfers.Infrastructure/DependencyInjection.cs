@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +25,8 @@ public static class DependencyInjection
         var dataSource = builder.Build();
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure()));
+            options.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure())
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 

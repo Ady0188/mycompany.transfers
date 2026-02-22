@@ -23,9 +23,9 @@ public sealed class ProvidersController : BaseController
     public ProvidersController(ISender mediator) => _mediator = mediator;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetProvidersQuery(), ct);
+        var result = await _mediator.Send(new GetProvidersQuery(page, pageSize, search), ct);
         return Ok(result);
     }
 

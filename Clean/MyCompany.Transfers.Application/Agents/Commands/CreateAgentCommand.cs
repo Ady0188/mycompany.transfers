@@ -10,6 +10,7 @@ namespace MyCompany.Transfers.Application.Agents.Commands;
 public sealed record CreateAgentCommand(
     string Id,
     string Account,
+    string? Name,
     string TimeZoneId,
     string SettingsJson) : IRequest<ErrorOr<AgentAdminDto>>;
 
@@ -29,7 +30,7 @@ public sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentComma
         if (await _agents.ExistsAsync(m.Id, ct))
             return AppErrors.Common.Validation($"Агент '{m.Id}' уже существует.");
 
-        Agent agent = Agent.Create(m.Id, m.Account, m.TimeZoneId, m.SettingsJson);
+        Agent agent = Agent.Create(m.Id, m.Account, m.Name, m.TimeZoneId, m.SettingsJson);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {

@@ -1,0 +1,363 @@
+@using System.IO
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using System.Text.RegularExpressions
+@using System.Xml
+@using System.Xml.Linq
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+
+@if (!string.IsNullOrEmpty(_parseError))
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-2">@_parseError</MudAlert>
+    <MudTextField @bind-Value="_rawJson" Variant="Variant.Outlined" Lines="8" Immediate="true" Label="JSON (исправьте и сохраните)" />
+}
+else
+{
+    <div style="overflow: auto; max-height: 60vh; min-height: 200px;">
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
+            <MudTabPanel Text="common" Class="pa-3">
+                <div style="overflow: auto;">
+                    <MudStack Spacing="1">
+                        @foreach (var kv in _settings.Common.ToList())
+                        {
+                            var k = kv.Key;
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudTextField Value="@k" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => SetCommonKey(k, v)))" Variant="Variant.Outlined" Placeholder="Ключ" Style="min-width: 140px;" Immediate="true" />
+                                <MudTextField Value="@kv.Value" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => SetCommonValue(k, v)))" Variant="Variant.Outlined" Placeholder="Значение" Style="flex: 1;" Immediate="true" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveCommonKey(k))" title="Удалить" />
+                            </MudStack>
+                        }
+                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddCommonKey">Добавить поле</MudButton>
+                    </MudStack>
+                </div>
+            </MudTabPanel>
+
+            <MudTabPanel Text="operations" Class="pa-0">
+                <div class="d-flex" style="min-height: 280px;">
+                    <MudPaper Elevation="0" Outlined="true" Class="flex-shrink-0" Style="width: 220px; border-right: 1px solid var(--mud-palette-lines-default);">
+                        <MudList clickable="true" T="string" SelectedValue="_selectedOperationKey" SelectedValueChanged="OnSelectedOperationChanged" Dense="true">
+                            @foreach (var op in _settings.Operations.ToList())
+                            {
+                                var opKey = op.Key;
+                                <MudListItem T="string" Value="@opKey" Icon="@Icons.Material.Filled.Api">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
+                                        <span>@opKey</span>
+                                        <span @onclick:stopPropagation="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveOperation(opKey))" title="Удалить метод" />
+                                        </span>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+                        <MudButton Variant="Variant.Text" FullWidth="true" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOperation" Class="mt-1">Добавить метод</MudButton>
+                    </MudPaper>
+                    <div class="flex-grow-1 pa-3" style="overflow: auto;">
+                        @if (string.IsNullOrEmpty(_selectedOperationKey) || !_settings.Operations.ContainsKey(_selectedOperationKey))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Выберите метод слева или добавьте новый.</MudText>
+                        }
+                        else
+                        {
+                            var opName = _selectedOperationKey;
+                            var opVal = _settings.Operations[_selectedOperationKey];
+                            <MudStack Spacing="2">
+                                <div class="d-flex align-items-center" style="flex-wrap: nowrap; gap: 8px;">
+                                    <div style="width: 160px; flex-shrink: 0;">
+                                        <MudTextField Label="Имя метода" Value="@opName" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => RenameOperation(opName, v ?? "")))" Variant="Variant.Outlined" Immediate="true" FullWidth="true" />
+                                    </div>
+                                    <div style="width: 100px; flex-shrink: 0;">
+                                        <MudSelect T="string" @bind-Value="opVal.Method" Label="Method" Variant="Variant.Outlined" FullWidth="true" AnchorOrigin="Origin.BottomCenter">
+                                            <MudSelectItem T="string" Value="@("GET")">GET</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("POST")">POST</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("PUT")">PUT</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("PATCH")">PATCH</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("DELETE")">DELETE</MudSelectItem>
+                                        </MudSelect>
+                                    </div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <MudTextField Label="PathTemplate" Value="@opVal.PathTemplate" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.PathTemplate = v ?? "/"; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" FullWidth="true" />
+                                    </div>
+                                </div>
+                                <MudText Typo="Typo.caption">Заголовки</MudText>
+                                @foreach (var h in (opVal.HeaderTemplate ??= new Dictionary<string, string>()).ToList())
+                                {
+                                    var hk = h.Key;
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudTextField Value="@h.Key" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => SetHeaderKey(opVal, hk, v ?? "")))" Variant="Variant.Outlined" Placeholder="Ключ" Style="min-width: 120px;" Immediate="true" />
+                                        <MudTextField Value="@h.Value" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => SetHeaderValue(opVal, hk, v ?? "")))" Variant="Variant.Outlined" Placeholder="Значение" Style="flex: 1;" Immediate="true" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveHeaderKey(opVal, hk))" title="Удалить" />
+                                    </MudStack>
+                                }
+                                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddHeaderKey(opVal))">Добавить заголовок</MudButton>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.caption">Тело запроса (JSON/XML)</MudText>
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.AutoFixHigh" OnClick="@(() => BeautifyBody(opVal))">Beautify</MudButton>
+                                </MudStack>
+                                <MudTextField Label="BodyTemplate" Value="@opVal.BodyTemplate" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.BodyTemplate = v; _ = EmitChange(); }))" Variant="Variant.Outlined" Lines="8" Immediate="true" Placeholder="JSON или XML" />
+                                <MudGrid Spacing="2">
+                                    <MudItem xs="12" sm="6"><MudTextField Label="Format" Value="@opVal.Format" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.Format = v ?? "json"; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                                    <MudItem xs="12" sm="6"><MudTextField Label="ResponseFormat" Value="@opVal.ResponseFormat" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.ResponseFormat = v ?? "json"; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                                    <MudItem xs="12" sm="6"><MudTextField Label="ResponseField" Value="@opVal.ResponseField" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.ResponseField = v; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                                    <MudItem xs="12" sm="6"><MudTextField Label="SuccessField" Value="@opVal.SuccessField" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.SuccessField = v; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                                    <MudItem xs="12" sm="6"><MudTextField Label="SuccessValue" Value="@opVal.SuccessValue" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.SuccessValue = v; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                                    <MudItem xs="12" sm="6"><MudTextField Label="ErrorField" Value="@opVal.ErrorField" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => { opVal.ErrorField = v; _ = EmitChange(); }))" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                                </MudGrid>
+                            </MudStack>
+                        }
+                    </div>
+                </div>
+            </MudTabPanel>
+
+            <MudTabPanel Text="jobScenario" Class="pa-3">
+                <div style="overflow: auto;">
+                    <MudStack Spacing="1">
+                        @foreach (var kv in _settings.JobScenario.ToList())
+                        {
+                            var status = kv.Key;
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudSelect T="OutboxStatus" Value="@status" ValueChanged="@(EventCallback.Factory.Create<OutboxStatus>(this, v => SetJobScenarioKey(status, v)))" Variant="Variant.Outlined" Label="Статус" Style="min-width: 160px;" AnchorOrigin="Origin.BottomCenter">
+                                    @foreach (OutboxStatus s in Enum.GetValues(typeof(OutboxStatus)))
+                                    {
+                                        <MudSelectItem T="OutboxStatus" Value="@s">@s.ToString()</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudTextField Value="@kv.Value" ValueChanged="@(EventCallback.Factory.Create<string>(this, v => SetJobScenarioValue(status, v)))" Variant="Variant.Outlined" Placeholder="Имя операции" Style="flex: 1;" Immediate="true" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveJobScenarioKey(status))" title="Удалить" />
+                            </MudStack>
+                        }
+                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddJobScenarioKey">Добавить</MudButton>
+                    </MudStack>
+                </div>
+            </MudTabPanel>
+        </MudTabs>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = false,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
+
+    private string? _parseError;
+    private string? _rawJson;
+    private ProviderSettings _settings = new();
+    private string? _lastValue;
+    private string? _selectedOperationKey;
+
+    protected override void OnParametersSet()
+    {
+        var raw = Value?.ToString() ?? "{}";
+        if (raw == _lastValue) return;
+        _lastValue = raw;
+        LoadFromJson(raw);
+        if (string.IsNullOrEmpty(_selectedOperationKey) && _settings.Operations.Count > 0)
+            _selectedOperationKey = _settings.Operations.Keys.First();
+        else if (!string.IsNullOrEmpty(_selectedOperationKey) && !_settings.Operations.ContainsKey(_selectedOperationKey))
+            _selectedOperationKey = _settings.Operations.Keys.FirstOrDefault();
+    }
+
+    private void OnSelectedOperationChanged(string? key)
+    {
+        _selectedOperationKey = key;
+        StateHasChanged();
+    }
+
+    private void LoadFromJson(string json)
+    {
+        _parseError = null;
+        _rawJson = json;
+        if (string.IsNullOrWhiteSpace(json)) json = "{}";
+        json = json.Trim().TrimStart('\uFEFF');
+        if (json.StartsWith("_", StringComparison.Ordinal) || (!json.StartsWith("{") && !json.StartsWith("[")))
+            json = "{}";
+        try
+        {
+            _settings = JsonSerializer.Deserialize<ProviderSettings>(json, JsonOptions) ?? new ProviderSettings();
+            _settings.Common ??= new Dictionary<string, string>();
+            _settings.Operations ??= new Dictionary<string, ProviderOperationSettings>();
+            _settings.JobScenario ??= new Dictionary<OutboxStatus, string>();
+            foreach (var op in _settings.Operations.Values)
+                op.HeaderTemplate ??= new Dictionary<string, string>();
+        }
+        catch (Exception ex)
+        {
+            _parseError = "Не удалось разобрать JSON: " + ex.Message;
+            _settings = new ProviderSettings();
+        }
+    }
+
+    private async Task EmitChange()
+    {
+        var toSerialize = JsonSerializer.Deserialize<ProviderSettings>(JsonSerializer.Serialize(_settings, JsonOptions), JsonOptions)!;
+        foreach (var op in toSerialize.Operations.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(op.BodyTemplate))
+                op.BodyTemplate = MinifyBody(op.BodyTemplate, op.Format);
+        }
+        var json = JsonSerializer.Serialize(toSerialize, JsonOptions);
+        await ValueChanged.InvokeAsync(json);
+    }
+
+    private void AddCommonKey()
+    {
+        var key = "__new_" + Guid.NewGuid().ToString("N")[..8];
+        _settings.Common[key] = "";
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void SetCommonKey(string oldK, string newK)
+    {
+        if (oldK == newK) return;
+        if (_settings.Common.Remove(oldK, out var v)) { _settings.Common[newK] = v; StateHasChanged(); _ = EmitChange(); }
+    }
+    private void SetCommonValue(string k, string v) { _settings.Common[k] = v; StateHasChanged(); _ = EmitChange(); }
+    private void RemoveCommonKey(string k) { _settings.Common.Remove(k); StateHasChanged(); _ = EmitChange(); }
+
+    private void AddOperation()
+    {
+        var name = "newMethod";
+        for (var i = 0; _settings.Operations.ContainsKey(name); i++) name = $"newMethod_{i}";
+        _settings.Operations[name] = new ProviderOperationSettings();
+        _selectedOperationKey = name;
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void RemoveOperation(string name)
+    {
+        _settings.Operations.Remove(name);
+        if (_selectedOperationKey == name)
+            _selectedOperationKey = _settings.Operations.Keys.FirstOrDefault();
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void AddHeaderKey(ProviderOperationSettings op)
+    {
+        op.HeaderTemplate ??= new Dictionary<string, string>();
+        var key = "__h_" + Guid.NewGuid().ToString("N")[..6];
+        op.HeaderTemplate[key] = "";
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void SetHeaderKey(ProviderOperationSettings op, string oldK, string newK)
+    {
+        if (oldK == newK) return;
+        op.HeaderTemplate ??= new Dictionary<string, string>();
+        if (op.HeaderTemplate.Remove(oldK, out var v)) { op.HeaderTemplate[newK] = v; StateHasChanged(); _ = EmitChange(); }
+    }
+    private void SetHeaderValue(ProviderOperationSettings op, string k, string v)
+    {
+        op.HeaderTemplate ??= new Dictionary<string, string>();
+        op.HeaderTemplate[k] = v;
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void RemoveHeaderKey(ProviderOperationSettings op, string k)
+    {
+        op.HeaderTemplate?.Remove(k);
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void BeautifyBody(ProviderOperationSettings op)
+    {
+        var body = op.BodyTemplate?.Trim();
+        if (string.IsNullOrEmpty(body)) return;
+        var fmt = (op.Format ?? "json").Trim().Replace(" ", "").ToLowerInvariant();
+        try
+        {
+            op.BodyTemplate = fmt == "xml" ? BeautifyXml(body) : BeautifyJson(body);
+            StateHasChanged();
+            _ = EmitChange();
+        }
+        catch { /* оставляем как есть */ }
+    }
+    private static string BeautifyJson(string raw)
+    {
+        var (clean, placeholders) = ReplaceTemplatePlaceholdersForJson(raw);
+        using var doc = JsonDocument.Parse(clean);
+        var result = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        return RestoreTemplatePlaceholders(result, placeholders);
+    }
+    private static (string json, List<string> placeholders) ReplaceTemplatePlaceholdersForJson(string raw)
+    {
+        var placeholders = new List<string>();
+        var pattern = new Regex(@"\[([^\]]+)\]");
+        var clean = pattern.Replace(raw, m =>
+        {
+            var token = m.Value;
+            var idx = placeholders.IndexOf(token);
+            if (idx < 0) { idx = placeholders.Count; placeholders.Add(token); }
+            return (12340000 + idx).ToString();
+        });
+        return (clean, placeholders);
+    }
+    private static string RestoreTemplatePlaceholders(string json, List<string> placeholders)
+    {
+        for (var i = placeholders.Count - 1; i >= 0; i--)
+            json = json.Replace((12340000 + i).ToString(), placeholders[i]);
+        return json;
+    }
+    private static string BeautifyXml(string raw)
+    {
+        var doc = XDocument.Parse(raw);
+        using var sw = new StringWriter();
+        using var writer = XmlWriter.Create(sw, new XmlWriterSettings { Indent = true, OmitXmlDeclaration = true });
+        doc.WriteTo(writer);
+        writer.Flush();
+        return sw.ToString();
+    }
+    private static string MinifyBody(string body, string format)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return body;
+        var fmt = (format ?? "json").Trim().Replace(" ", "").ToLowerInvariant();
+        try
+        {
+            return fmt == "xml" ? MinifyXml(body) : MinifyJson(body);
+        }
+        catch { return body; }
+    }
+    private static string MinifyJson(string raw)
+    {
+        var (clean, placeholders) = ReplaceTemplatePlaceholdersForJson(raw);
+        using var doc = JsonDocument.Parse(clean);
+        var result = JsonSerializer.Serialize(doc.RootElement);
+        return RestoreTemplatePlaceholders(result, placeholders);
+    }
+    private static string MinifyXml(string raw)
+    {
+        var doc = XDocument.Parse(raw);
+        return doc.ToString(SaveOptions.DisableFormatting);
+    }
+    private void RenameOperation(string oldName, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName) || oldName == newName) return;
+        if (!_settings.Operations.Remove(oldName, out var op)) return;
+        _settings.Operations[newName.Trim()] = op;
+        if (_selectedOperationKey == oldName)
+            _selectedOperationKey = newName.Trim();
+        StateHasChanged();
+        _ = EmitChange();
+    }
+
+    private void AddJobScenarioKey()
+    {
+        var unused = Enum.GetValues<OutboxStatus>().FirstOrDefault(s => !_settings.JobScenario.ContainsKey(s));
+        _settings.JobScenario[unused] = "";
+        StateHasChanged();
+        _ = EmitChange();
+    }
+    private void SetJobScenarioKey(OutboxStatus oldK, OutboxStatus newK)
+    {
+        if (oldK == newK) return;
+        if (_settings.JobScenario.Remove(oldK, out var v)) { _settings.JobScenario[newK] = v; StateHasChanged(); _ = EmitChange(); }
+    }
+    private void SetJobScenarioValue(OutboxStatus k, string v) { _settings.JobScenario[k] = v; StateHasChanged(); _ = EmitChange(); }
+    private void RemoveJobScenarioKey(OutboxStatus k) { _settings.JobScenario.Remove(k); StateHasChanged(); _ = EmitChange(); }
+}

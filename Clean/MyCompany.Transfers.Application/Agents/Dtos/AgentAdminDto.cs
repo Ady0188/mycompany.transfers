@@ -4,11 +4,12 @@ namespace MyCompany.Transfers.Application.Agents.Dtos;
 
 public sealed record AgentAdminDto(
     string Id,
+    string Name,
     string Account,
     string TimeZoneId,
     string SettingsJson)
 {
     public static AgentAdminDto FromDomain(Agent a) =>
-        new(a.Id, a.Account, a.TimeZoneId, a.SettingsJson);
+        new(a.Id, a.Name, a.Account, a.TimeZoneId, a.SettingsJson);
 }
 

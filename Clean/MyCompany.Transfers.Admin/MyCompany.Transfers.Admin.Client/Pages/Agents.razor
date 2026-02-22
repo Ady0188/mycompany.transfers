@@ -4,6 +4,7 @@
 @inject IAgentsApiService Api
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject ITimeZoneListService TimeZoneService
 
 <PageTitle>Агенты — Админ-панель</PageTitle>
 
@@ -15,54 +16,69 @@
         </MudButton>
     </MudStack>
 
-    @if (_loading)
-    {
-        <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
-    }
-
     <MudCard Elevation="2">
-        <MudTable Items="@_list" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true" Height="400px">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+            <MudTextField @bind-Value="_search" Label="Поиск (Id, название, счёт, часовой пояс)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="false" OnKeyUp="OnSearchKeyUp" Style="max-width: 420px;" />
+            <MudButton Variant="Variant.Outlined" OnClick="ApplyFilter">Применить</MudButton>
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="AgentAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
             <HeaderContent>
                 <MudTh>Id</MudTh>
+                <MudTh>Название</MudTh>
                 <MudTh>Счёт</MudTh>
                 <MudTh>Часовой пояс</MudTh>
-                <MudTh>Настройки (JSON)</MudTh>
                 <MudTh Style="width: 120px;">Действия</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Id">@context.Id</MudTd>
+                <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
                 <MudTd DataLabel="Счёт">@context.Account</MudTd>
-                <MudTd DataLabel="Часовой пояс">@context.TimeZoneId</MudTd>
-                <MudTd DataLabel="Настройки">@(string.IsNullOrEmpty(context.SettingsJson) ? "—" : (context.SettingsJson.Length > 50 ? context.SettingsJson[..50] + "…" : context.SettingsJson))</MudTd>
+                <MudTd DataLabel="Часовой пояс">@TimeZoneService.GetDisplayName(context.TimeZoneId)</MudTd>
                 <MudTd DataLabel="Действия">
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
                 </MudTd>
             </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }"
+                               RowsPerPageString="Записей на странице:" InfoFormat="{first_item}–{last_item} из {all_items}" />
+            </PagerContent>
         </MudTable>
     </MudCard>
 </MudStack>
 
 @code {
-    private List<AgentAdminDto> _list = new();
     private bool _loading;
+    private string _search = "";
+    private int _filterVersion;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
+    private async Task<TableData<AgentAdminDto>> LoadServerData(TableState state, CancellationToken ct)
     {
         _loading = true;
         StateHasChanged();
         try
         {
-            _list = await Api.GetAllAsync();
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+            var result = await Api.GetPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(_search) ? null : _search, ct);
+            return new TableData<AgentAdminDto>
+            {
+                Items = result.Items ?? new List<AgentAdminDto>(),
+                TotalItems = result.TotalCount
+            };
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            return new TableData<AgentAdminDto> { Items = Array.Empty<AgentAdminDto>(), TotalItems = 0 };
         }
         finally
         {
@@ -71,26 +87,50 @@
         }
     }
 
+    private async Task ApplyFilter()
+    {
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _filterVersion++;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task ReloadAfterEdit()
+    {
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
     private async Task OpenCreate()
     {
-        var dto = new AgentAdminDto { Id = "", Account = "", TimeZoneId = "UTC", SettingsJson = "" };
+        var dto = new AgentAdminDto { Id = "", Name = "", Account = "", TimeZoneId = "UTC", SettingsJson = "" };
         var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Новый агент", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
-            await LoadAsync();
+            await ReloadAfterEdit();
     }
 
     private async Task OpenEdit(AgentAdminDto item)
     {
-        var copy = new AgentAdminDto { Id = item.Id, Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "" };
+        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "" };
         var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Изменить агента", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
-            await LoadAsync();
+            await ReloadAfterEdit();
     }
 
     private async Task ConfirmDelete(AgentAdminDto item)
@@ -110,7 +150,7 @@
             if (success)
             {
                 Snackbar.Add("Агент удалён.", Severity.Success);
-                await LoadAsync();
+                await ReloadAfterEdit();
             }
             else
                 Snackbar.Add(error ?? "Ошибка удаления", Severity.Error);

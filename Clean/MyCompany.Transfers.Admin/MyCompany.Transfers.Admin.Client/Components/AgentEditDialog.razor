@@ -1,29 +1,81 @@
+@using System.Text.Json
 @using MudBlazor
 @using MyCompany.Transfers.Admin.Client.Models
 @using MyCompany.Transfers.Admin.Client.Services
+@using MyCompany.Transfers.Admin.Client.Helpers
 @inject IAgentsApiService Api
 @inject ISnackbar Snackbar
+@inject ITimeZoneListService TimeZoneService
 
 <MudDialog>
     <DialogContent>
         <EditForm Model="_model" OnValidSubmit="Submit">
-            <MudStack Spacing="3">
-                <MudTextField @bind-Value="_model.Id" Label="Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id"
-                             ReadOnly="!_isCreate" Immediate="true" />
-                <MudTextField @bind-Value="_model.Account" Label="Счёт" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
-                <MudTextField @bind-Value="_model.TimeZoneId" Label="Часовой пояс (например UTC)" Variant="Variant.Outlined" Immediate="true" />
-                <MudTextField @bind-Value="_model.SettingsJson" Label="Настройки (JSON)" Variant="Variant.Outlined" Lines="3" Immediate="true" />
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Название <span class="text-error">*</span></MudText>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField Value="_model.Name" ValueChanged="@(EventCallback.Factory.Create<string>(this, OnNameChanged))" Variant="Variant.Outlined" Immediate="true"
+                                 Placeholder="При создании из названия сгенерируется Id" />
+                </MudItem>
+
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id <span class="text-error">*</span></MudText>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id"
+                                 ReadOnly="!_isCreate" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Счёт <span class="text-error">*</span></MudText>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Account" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Часовой пояс</MudText>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="string" @bind-Value="_model.TimeZoneId" Variant="Variant.Outlined" Label="Часовой пояс" AnchorOrigin="Origin.BottomCenter">
+                        @foreach (var tz in _timeZones)
+                        {
+                            <MudSelectItem T="string" Value="@tz.Id">@tz.DisplayName</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2" Class="mb-2">Настройки (ключ — значение)</MudText>
+                    <MudStack Spacing="2">
+                        @foreach (var item in _settingsList)
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudTextField @bind-Value="item.Key" Variant="Variant.Outlined" Placeholder="Ключ" Style="min-width: 140px;" Immediate="true" />
+                                <MudTextField @bind-Value="item.Value" Variant="Variant.Outlined" Placeholder="Значение" Style="flex: 1;" Immediate="true" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveSetting(item))" title="Удалить" />
+                            </MudStack>
+                        }
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddSetting">Добавить настройку</MudButton>
+                    </MudStack>
+                </MudItem>
+
                 @if (!string.IsNullOrEmpty(_error))
                 {
-                    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Error">@_error</MudAlert>
+                    </MudItem>
                 }
-                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
-                    <MudButton OnClick="Cancel">Отмена</MudButton>
-                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
-                        @(_sending ? "Сохранение…" : "Сохранить")
-                    </MudButton>
-                </MudStack>
-            </MudStack>
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton OnClick="Cancel">Отмена</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                            @(_sending ? "Сохранение…" : "Сохранить")
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
         </EditForm>
     </DialogContent>
 </MudDialog>
@@ -33,15 +85,70 @@
     [Parameter] public AgentAdminDto Model { get; set; } = null!;
     [Parameter] public bool IsCreate { get; set; }
 
+    private IReadOnlyList<(string Id, string DisplayName)> _timeZones = Array.Empty<(string, string)>();
+
     private AgentAdminDto _model = null!;
+    private List<SettingItem> _settingsList = new();
     private bool _isCreate;
     private bool _sending;
     private string? _error;
 
     protected override void OnInitialized()
     {
-        _model = new AgentAdminDto { Id = Model.Id, Account = Model.Account, TimeZoneId = Model.TimeZoneId ?? "UTC", SettingsJson = Model.SettingsJson ?? "" };
+        _timeZones = TimeZoneService.GetTimeZonesForDisplay();
+        _model = new AgentAdminDto { Id = Model.Id, Name = Model.Name ?? "", Account = Model.Account, TimeZoneId = Model.TimeZoneId ?? "UTC", SettingsJson = Model.SettingsJson ?? "" };
         _isCreate = IsCreate;
+        LoadSettingsFromJson(_model.SettingsJson);
+    }
+
+    private void LoadSettingsFromJson(string json)
+    {
+        _settingsList.Clear();
+        if (string.IsNullOrWhiteSpace(json))
+            return;
+        try
+        {
+            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            if (dict == null) return;
+            foreach (var kv in dict)
+                _settingsList.Add(new SettingItem { Key = kv.Key, Value = kv.Value ?? "" });
+        }
+        catch
+        {
+            // оставляем пустой список при невалидном JSON
+        }
+    }
+
+    private void AddSetting()
+    {
+        _settingsList.Add(new SettingItem());
+        StateHasChanged();
+    }
+
+    private void RemoveSetting(SettingItem item)
+    {
+        _settingsList.Remove(item);
+        StateHasChanged();
+    }
+
+    private static string SerializeSettingsToJson(List<SettingItem> list)
+    {
+        var dict = new Dictionary<string, string>();
+        foreach (var item in list.Where(x => !string.IsNullOrWhiteSpace(x.Key)))
+            dict[item.Key.Trim()] = item.Value ?? "";
+        return dict.Count == 0 ? "{}" : JsonSerializer.Serialize(dict);
+    }
+
+    private Task OnNameChanged(string value)
+    {
+        _model.Name = value ?? "";
+        if (_isCreate && !string.IsNullOrWhiteSpace(value))
+        {
+            var id = SlugHelper.IdFromName(value);
+            if (!string.IsNullOrEmpty(id))
+                _model.Id = id;
+        }
+        return Task.CompletedTask;
     }
 
     private void Cancel() => MudDialog.Cancel();
@@ -49,6 +156,7 @@
     private async Task Submit()
     {
         _error = null;
+        _model.SettingsJson = SerializeSettingsToJson(_settingsList);
         _sending = true;
         StateHasChanged();
         try

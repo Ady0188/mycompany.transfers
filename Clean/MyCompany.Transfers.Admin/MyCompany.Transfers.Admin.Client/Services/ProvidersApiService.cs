@@ -6,7 +6,7 @@ namespace MyCompany.Transfers.Admin.Client.Services;
 
 public interface IProvidersApiService
 {
-    Task<List<ProviderAdminDto>> GetAllAsync(CancellationToken ct = default);
+    Task<PagedResult<ProviderAdminDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default);
     Task<ProviderAdminDto?> GetByIdAsync(string id, CancellationToken ct = default);
     Task<(bool success, string? error)> CreateAsync(ProviderAdminDto dto, CancellationToken ct = default);
     Task<(bool success, string? error)> UpdateAsync(string id, ProviderAdminDto dto, CancellationToken ct = default);
@@ -21,10 +21,14 @@ public sealed class ProvidersApiService : IProvidersApiService
 
     private HttpClient Api() => _httpFactory.CreateClient("Api");
 
-    public async Task<List<ProviderAdminDto>> GetAllAsync(CancellationToken ct = default)
+    public async Task<PagedResult<ProviderAdminDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default)
     {
-        var list = await Api().GetFromJsonAsync<List<ProviderAdminDto>>("api/admin/providers", ct);
-        return list ?? new List<ProviderAdminDto>();
+        var query = new List<string> { $"page={page}", $"pageSize={pageSize}" };
+        if (!string.IsNullOrWhiteSpace(search))
+            query.Add($"search={Uri.EscapeDataString(search.Trim())}");
+        var url = "api/admin/providers?" + string.Join("&", query);
+        var result = await Api().GetFromJsonAsync<PagedResult<ProviderAdminDto>>(url, ct);
+        return result ?? new PagedResult<ProviderAdminDto>();
     }
 
     public async Task<ProviderAdminDto?> GetByIdAsync(string id, CancellationToken ct = default)

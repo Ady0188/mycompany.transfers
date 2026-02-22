@@ -45,8 +45,8 @@ public sealed class AuthController : ControllerBase
                 Message = "Укажите логин и пароль."
             });
         }
-
-        var token = _jwtToken.CreateToken(request.Login, request.Login.Trim(), (new List<string>()).ToArray());
+        var allowedRoles = _config.GetSection("Admin:AllowedRoles").Get<string[]>() ?? Array.Empty<string>();
+        var token = _jwtToken.CreateToken(request.Login, request.Login.Trim(), allowedRoles);
         return Ok(new LoginResponse { Token = token, UserName = request.Login ?? request.Login });
 
         //var (isValid, userName) = await _adAuth.ValidateAsync(request.Login.Trim(), request.Password, ct);

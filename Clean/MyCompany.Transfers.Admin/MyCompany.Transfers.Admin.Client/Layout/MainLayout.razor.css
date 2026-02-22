@@ -2,5 +2,12 @@
  * Все стили админ-панели и лейаута перенесены в глобальный CSS хоста:
  * MyCompany.Transfers.Admin/wwwroot/css/admin-custom.css (подключён в App.razor).
  * Scoped CSS (.razor.css) из Client при первом рендере с сервера (Interactive Auto) не подгружается.
- * Этот файл оставлен пустым, чтобы не дублировать правила.
  */
+
+.admin-auth-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+}

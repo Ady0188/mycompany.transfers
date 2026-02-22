@@ -25,7 +25,7 @@ public sealed class CachedProviderRepository : IProviderRepository
         _cache.GetOrCreateAsync($"provider:exists-enabled:{id}", _ => _inner.ExistsEnabledAsync(id, ct), Ttl, ct);
 
     public async Task<IReadOnlyList<Provider>> GetAllAsync(CancellationToken ct) =>
-        (await _cache.GetOrCreateAsync("provider:all", async _ => (IReadOnlyList<Provider>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Provider>();
+        await _inner.GetAllAsync(ct);
 
     public void Add(Provider provider) => _inner.Add(provider);
 

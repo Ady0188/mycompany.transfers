@@ -15,13 +15,20 @@
         </MudButton>
     </MudStack>
 
-    @if (_loading)
-    {
-        <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
-    }
-
     <MudCard Elevation="2">
-        <MudTable Items="@_list" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true" Height="400px">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+            <MudTextField @bind-Value="_search" Label="Поиск (Id, счёт, название, URL)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="false" OnKeyUp="OnSearchKeyUp" Style="max-width: 320px;" />
+            <MudButton Variant="Variant.Outlined" OnClick="ApplyFilter">Применить</MudButton>
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="ProviderAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true" Height="400px">
             <HeaderContent>
                 <MudTh>Id</MudTh>
                 <MudTh>Счёт</MudTh>
@@ -43,30 +50,38 @@
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
                 </MudTd>
             </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }"
+                               RowsPerPageString="Записей на странице:" InfoFormat="{first_item}–{last_item} из {all_items}" />
+            </PagerContent>
         </MudTable>
     </MudCard>
 </MudStack>
 
 @code {
-    private List<ProviderAdminDto> _list = new();
     private bool _loading;
+    private string _search = "";
+    private int _filterVersion;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
+    private async Task<TableData<ProviderAdminDto>> LoadServerData(TableState state, CancellationToken ct)
     {
         _loading = true;
         StateHasChanged();
         try
         {
-            _list = await Api.GetAllAsync();
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+            var result = await Api.GetPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(_search) ? null : _search, ct);
+            return new TableData<ProviderAdminDto>
+            {
+                Items = result.Items ?? new List<ProviderAdminDto>(),
+                TotalItems = result.TotalCount
+            };
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            return new TableData<ProviderAdminDto> { Items = Array.Empty<ProviderAdminDto>(), TotalItems = 0 };
         }
         finally
         {
@@ -75,15 +90,39 @@
         }
     }
 
+    private async Task ApplyFilter()
+    {
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _filterVersion++;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task ReloadAfterEdit()
+    {
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
     private async Task OpenCreate()
     {
         var dto = new ProviderAdminDto { Id = "", Account = "", Name = "", BaseUrl = "", TimeoutSeconds = 30, AuthType = 0, SettingsJson = "{}", IsEnabled = true, FeePermille = 0 };
         var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge, FullWidth = true };
         var dialog = await DialogService.ShowAsync<ProviderEditDialog>("Новый провайдер", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
-            await LoadAsync();
+            await ReloadAfterEdit();
     }
 
     private async Task OpenEdit(ProviderAdminDto item)
@@ -95,11 +134,11 @@
             IsEnabled = item.IsEnabled, IsOnline = item.IsOnline, FeePermille = item.FeePermille
         };
         var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge, FullWidth = true };
         var dialog = await DialogService.ShowAsync<ProviderEditDialog>("Изменить провайдера", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
-            await LoadAsync();
+            await ReloadAfterEdit();
     }
 
     private async Task ConfirmDelete(ProviderAdminDto item)
@@ -119,7 +158,7 @@
             if (success)
             {
                 Snackbar.Add("Провайдер удалён.", Severity.Success);
-                await LoadAsync();
+                await ReloadAfterEdit();
             }
             else
                 Snackbar.Add(error ?? "Ошибка удаления", Severity.Error);

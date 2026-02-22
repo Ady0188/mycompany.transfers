@@ -50,6 +50,19 @@ builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer
 
 builder.Services.AddAuthorization();
 
+// CORS: админ-панель (Blazor) с другого origin — нужен Access-Control-Allow-Origin
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "https://localhost:7210", "https://localhost:55474" };
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins(corsOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -102,7 +115,7 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Включаем Authentication и Authorization middleware
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 

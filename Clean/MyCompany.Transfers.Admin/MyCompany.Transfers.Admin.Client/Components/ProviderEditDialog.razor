@@ -1,41 +1,73 @@
 @using MudBlazor
 @using MyCompany.Transfers.Admin.Client.Models
 @using MyCompany.Transfers.Admin.Client.Services
+@using MyCompany.Transfers.Admin.Client.Helpers
 @inject IProvidersApiService Api
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
+        <div class="pa-0" style="max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
         <EditForm Model="_model" OnValidSubmit="Submit">
-            <MudStack Spacing="3">
-                <MudTextField @bind-Value="_model.Id" Label="Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id"
-                              ReadOnly="!_isCreate" Immediate="true" />
-                <MudTextField @bind-Value="_model.Account" Label="Счёт" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
-                <MudTextField @bind-Value="_model.Name" Label="Название" Variant="Variant.Outlined" Immediate="true" />
-                <MudTextField @bind-Value="_model.BaseUrl" Label="Base URL" Variant="Variant.Outlined" Immediate="true" />
-                <MudNumericField @bind-Value="_model.TimeoutSeconds" Label="Таймаут (сек)" Variant="Variant.Outlined" Min="1" Max="300" Immediate="true" />
-                <MudSelect T="int" @bind-Value="_model.AuthType" Label="Тип авторизации" Variant="Variant.Outlined">
-                    <MudSelectItem T="int" Value="0">None</MudSelectItem>
-                    <MudSelectItem T="int" Value="1">Basic</MudSelectItem>
-                    <MudSelectItem T="int" Value="2">Bearer</MudSelectItem>
-                    <MudSelectItem T="int" Value="3">Hamac</MudSelectItem>
-                    <MudSelectItem T="int" Value="4">Custom</MudSelectItem>
-                </MudSelect>
-                <MudTextField @bind-Value="_model.SettingsJson" Label="Настройки (JSON)" Variant="Variant.Outlined" Lines="2" Immediate="true" />
-                <MudSwitch @bind-Value="_model.IsEnabled" Label="Включён" Color="Color.Primary" />
-                <MudNumericField @bind-Value="_model.FeePermille" Label="Комиссия (промилле)" Variant="Variant.Outlined" Min="0" Max="10000" Immediate="true" />
-                @if (!string.IsNullOrEmpty(_error))
-                {
-                    <MudAlert Severity="Severity.Error">@_error</MudAlert>
-                }
-                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
-                    <MudButton OnClick="Cancel">Отмена</MudButton>
-                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+            <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="flex-grow-1">
+                <MudTabPanel Text="Подключение" Class="pa-4">
+                    <MudPaper Outlined="true" Class="pa-4 mb-4" Elevation="0">
+                        <MudText Typo="Typo.subtitle2" Class="mb-3" Style="color: var(--mud-palette-primary);">Base URL</MudText>
+                        <MudTextField @bind-Value="_model.BaseUrl" Variant="Variant.Outlined" Immediate="true" Placeholder="https://api.example.com" FullWidth="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Link" />
+                    </MudPaper>
+                    <MudGrid Spacing="3">
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudTextField Label="Id" @bind-Value="_model.Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id" ReadOnly="!_isCreate" Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudTextField Label="Счёт" @bind-Value="_model.Account" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudTextField Label="Название" Value="_model.Name" ValueChanged="@(EventCallback.Factory.Create<string>(this, OnNameChanged))" Variant="Variant.Outlined" Immediate="true" Placeholder="При создании из названия сгенерируется Id" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField Label="Таймаут (сек)" @bind-Value="_model.TimeoutSeconds" Variant="Variant.Outlined" Min="1" Max="300" Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudSelect T="int" @bind-Value="_model.AuthType" Label="Тип авторизации" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                                <MudSelectItem T="int" Value="0">None</MudSelectItem>
+                                <MudSelectItem T="int" Value="1">Basic</MudSelectItem>
+                                <MudSelectItem T="int" Value="2">Bearer</MudSelectItem>
+                                <MudSelectItem T="int" Value="3">Hamac</MudSelectItem>
+                                <MudSelectItem T="int" Value="4">Custom</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+                <MudTabPanel Text="Запросы (common / operations / jobScenario)" Class="pa-4">
+                    <MudPaper Outlined="true" Class="pa-3" Elevation="0">
+                        <ProviderSettingsEditor Value="@_model.SettingsJson" ValueChanged="OnSettingsJsonChanged" />
+                    </MudPaper>
+                </MudTabPanel>
+            </MudTabs>
+
+            <MudDivider />
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudSwitch @bind-Value="_model.IsEnabled" Color="Color.Primary" Label="Включён" />
+                    <MudNumericField @bind-Value="_model.FeePermille" Label="Комиссия (‰)" Variant="Variant.Outlined" Min="0" Max="10000" Immediate="true" Style="width: 120px;" />
+                </MudStack>
+                <MudStack Row="true" Spacing="2">
+                    <MudButton OnClick="Cancel" Variant="Variant.Text">Отмена</MudButton>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending" StartIcon="@Icons.Material.Filled.Save">
                         @(_sending ? "Сохранение…" : "Сохранить")
                     </MudButton>
                 </MudStack>
             </MudStack>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="px-4 pb-2">
+                    <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+                </div>
+            }
         </EditForm>
+        </div>
     </DialogContent>
 </MudDialog>
 
@@ -65,6 +97,24 @@
             FeePermille = Model.FeePermille
         };
         _isCreate = IsCreate;
+    }
+
+    private Task OnNameChanged(string value)
+    {
+        _model.Name = value ?? "";
+        if (_isCreate && !string.IsNullOrWhiteSpace(value))
+        {
+            var id = SlugHelper.IdFromName(value);
+            if (!string.IsNullOrEmpty(id))
+                _model.Id = id;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task OnSettingsJsonChanged(string value)
+    {
+        _model.SettingsJson = value ?? "{}";
+        return Task.CompletedTask;
     }
 
     private void Cancel() => MudDialog.Cancel();

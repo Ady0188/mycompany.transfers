@@ -23,9 +23,9 @@ public sealed class AgentsController : BaseController
     public AgentsController(ISender mediator) => _mediator = mediator;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetAgentsQuery(), ct);
+        var result = await _mediator.Send(new GetAgentsQuery(page, pageSize, search), ct);
         return Ok(result);
     }
 
@@ -39,7 +39,7 @@ public sealed class AgentsController : BaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AgentAdminDto dto, CancellationToken ct)
     {
-        var cmd = new CreateAgentCommand(dto.Id, dto.Account, dto.TimeZoneId, dto.SettingsJson);
+        var cmd = new CreateAgentCommand(dto.Id, dto.Account, dto.Name, dto.TimeZoneId, dto.SettingsJson);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created), Problem);
     }
@@ -47,7 +47,7 @@ public sealed class AgentsController : BaseController
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] AgentAdminDto dto, CancellationToken ct)
     {
-        var cmd = new UpdateAgentCommand(id, dto.Account, dto.TimeZoneId, dto.SettingsJson);
+        var cmd = new UpdateAgentCommand(id, dto.Account, dto.Name, dto.TimeZoneId, dto.SettingsJson);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(updated => Ok(updated), Problem);
     }

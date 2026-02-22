@@ -6,7 +6,7 @@ namespace MyCompany.Transfers.Admin.Client.Services;
 
 public interface IAgentsApiService
 {
-    Task<List<AgentAdminDto>> GetAllAsync(CancellationToken ct = default);
+    Task<PagedResult<AgentAdminDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default);
     Task<AgentAdminDto?> GetByIdAsync(string id, CancellationToken ct = default);
     Task<(bool success, string? error)> CreateAsync(AgentAdminDto dto, CancellationToken ct = default);
     Task<(bool success, string? error)> UpdateAsync(string id, AgentAdminDto dto, CancellationToken ct = default);
@@ -21,10 +21,14 @@ public sealed class AgentsApiService : IAgentsApiService
 
     private HttpClient Api() => _httpFactory.CreateClient("Api");
 
-    public async Task<List<AgentAdminDto>> GetAllAsync(CancellationToken ct = default)
+    public async Task<PagedResult<AgentAdminDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default)
     {
-        var list = await Api().GetFromJsonAsync<List<AgentAdminDto>>("api/admin/agents", ct);
-        return list ?? new List<AgentAdminDto>();
+        var query = new List<string> { $"page={page}", $"pageSize={pageSize}" };
+        if (!string.IsNullOrWhiteSpace(search))
+            query.Add($"search={Uri.EscapeDataString(search.Trim())}");
+        var url = "api/admin/agents?" + string.Join("&", query);
+        var result = await Api().GetFromJsonAsync<PagedResult<AgentAdminDto>>(url, ct);
+        return result ?? new PagedResult<AgentAdminDto>();
     }
 
     public async Task<AgentAdminDto?> GetByIdAsync(string id, CancellationToken ct = default)
