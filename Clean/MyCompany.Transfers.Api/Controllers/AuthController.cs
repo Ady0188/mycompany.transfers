@@ -45,25 +45,22 @@ public sealed class AuthController : ControllerBase
                 Message = "Укажите логин и пароль."
             });
         }
+
+        var (isValid, userName) = await _adAuth.ValidateAsync(request.Login.Trim(), request.Password, ct);
+        if (!isValid)
+        {
+            return Unauthorized(new ApiErrorResponse
+            {
+                Code = "auth.invalid_credentials",
+                NumericCode = ErrorCodes.AuthUnauthorized,
+                Message = "Неверный логин или пароль."
+            });
+        }
+
         var allowedRoles = _config.GetSection("Admin:AllowedRoles").Get<string[]>() ?? Array.Empty<string>();
-        var token = _jwtToken.CreateToken(request.Login, request.Login.Trim(), allowedRoles);
-        return Ok(new LoginResponse { Token = token, UserName = request.Login ?? request.Login });
+        var roles = allowedRoles.Length > 0 ? allowedRoles : new[] { "Admin" };
 
-        //var (isValid, userName) = await _adAuth.ValidateAsync(request.Login.Trim(), request.Password, ct);
-        //if (!isValid)
-        //{
-        //    return Unauthorized(new ApiErrorResponse
-        //    {
-        //        Code = "auth.invalid_credentials",
-        //        NumericCode = ErrorCodes.AuthUnauthorized,
-        //        Message = "Неверный логин или пароль."
-        //    });
-        //}
-
-        //var allowedRoles = _config.GetSection("Admin:AllowedRoles").Get<string[]>() ?? Array.Empty<string>();
-        //var roles = allowedRoles.Length > 0 ? allowedRoles : new[] { "Admin" };
-
-        //var token = _jwtToken.CreateToken(userName ?? request.Login, request.Login.Trim(), roles);
-        //return Ok(new LoginResponse { Token = token, UserName = userName ?? request.Login });
+        var token = _jwtToken.CreateToken(userName ?? request.Login, request.Login.Trim(), roles);
+        return Ok(new LoginResponse { Token = token, UserName = userName ?? request.Login });
     }
 }
