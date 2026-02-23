@@ -1,6 +1,160 @@
 @page "/services"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IServicesApiService Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Услуги — Админ-панель</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Услуги</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">Справочник услуг. CRUD: api/admin/services</MudText>
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4" GutterBottom="false">Услуги</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">
+            Добавить
+        </MudButton>
+    </MudStack>
+
+    <MudCard Elevation="2">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+            <MudTextField @bind-Value="_search" Label="Поиск (Id, название, код)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="false" OnKeyUp="OnSearchKeyUp" Style="max-width: 420px;" />
+            <MudButton Variant="Variant.Outlined" OnClick="ApplyFilter">Применить</MudButton>
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="ServiceAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Id</MudTh>
+                <MudTh>Название</MudTh>
+                <MudTh>Код</MudTh>
+                <MudTh Style="width: 120px;">Действия</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Id">@context.Id</MudTd>
+                <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
+                <MudTd DataLabel="Код">@(context.ProviderServiceId ?? "—")</MudTd>
+                <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }"
+                               RowsPerPageString="Записей на странице:" InfoFormat="{first_item}–{last_item} из {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </MudCard>
+</MudStack>
+
+@code {
+    private bool _loading;
+    private string _search = "";
+    private int _filterVersion;
+
+    private async Task<TableData<ServiceAdminDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+            var result = await Api.GetPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(_search) ? null : _search, ct);
+            return new TableData<ServiceAdminDto>
+            {
+                Items = result.Items ?? new List<ServiceAdminDto>(),
+                TotalItems = result.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            return new TableData<ServiceAdminDto> { Items = Array.Empty<ServiceAdminDto>(), TotalItems = 0 };
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyFilter()
+    {
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _filterVersion++;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task ReloadAfterEdit()
+    {
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task OpenCreate()
+    {
+        var parameters = new DialogParameters { ["IsCreate"] = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ServiceEditDialog>("Новая услуга", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await ReloadAfterEdit();
+    }
+
+    private async Task OpenEdit(ServiceAdminDto item)
+    {
+        var loaded = await Api.GetByIdAsync(item.Id);
+        if (loaded is null)
+        {
+            Snackbar.Add("Услуга не найдена.", Severity.Warning);
+            return;
+        }
+        var parameters = new DialogParameters { ["Model"] = loaded, ["IsCreate"] = false };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ServiceEditDialog>("Изменить услугу", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await ReloadAfterEdit();
+    }
+
+    private async Task ConfirmDelete(ServiceAdminDto item)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"Удалить услугу «{item.Name ?? item.Id}»?",
+            ["ButtonText"] = "Удалить",
+            ["Color"] = Color.Error
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            var (success, error) = await Api.DeleteAsync(item.Id);
+            if (success)
+            {
+                Snackbar.Add("Услуга удалена.", Severity.Success);
+                await ReloadAfterEdit();
+            }
+            else
+                Snackbar.Add(error ?? "Ошибка удаления", Severity.Error);
+        }
+    }
+}

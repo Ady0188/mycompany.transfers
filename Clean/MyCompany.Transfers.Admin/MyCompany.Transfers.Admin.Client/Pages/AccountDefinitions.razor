@@ -1,6 +1,146 @@
 @page "/account-definitions"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAccountDefinitionsApiService Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Определения счетов — Админ-панель</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Определения счетов</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">Справочник определений счетов. CRUD: api/admin/account-definitions</MudText>
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4" GutterBottom="false">Определения счетов</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">
+            Добавить
+        </MudButton>
+    </MudStack>
+
+    <MudCard Elevation="2">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+            <MudTextField @bind-Value="_search" Label="Поиск (код, regex)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="true" Style="max-width: 320px;" />
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="AccountDefinitionAdminDto" Items="@_filteredItems" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Код</MudTh>
+                <MudTh>Regex</MudTh>
+                <MudTh>Normalize</MudTh>
+                <MudTh>Algorithm</MudTh>
+                <MudTh>Min / Max</MudTh>
+                <MudTh Style="width: 120px;">Действия</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Код">@context.Code</MudTd>
+                <MudTd DataLabel="Regex">@(context.Regex ?? "—")</MudTd>
+                <MudTd DataLabel="Normalize">@NormalizeName(context.Normalize)</MudTd>
+                <MudTd DataLabel="Algorithm">@AlgorithmName(context.Algorithm)</MudTd>
+                <MudTd DataLabel="Min/Max">@(context.MinLength?.ToString() ?? "—") / @(context.MaxLength?.ToString() ?? "—")</MudTd>
+                <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudCard>
+</MudStack>
+
+@code {
+    private bool _loading = true;
+    private string _search = "";
+    private List<AccountDefinitionAdminDto> _items = new();
+    private IEnumerable<AccountDefinitionAdminDto> _filteredItems => string.IsNullOrWhiteSpace(_search)
+        ? _items
+        : _items.Where(a =>
+            (a.Code?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (a.Regex?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _items = await Api.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            _items = new List<AccountDefinitionAdminDto>();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string NormalizeName(int v) => v switch { 0 => "None", 1 => "Trim", 2 => "DigitsOnly", _ => v.ToString() };
+    private static string AlgorithmName(int v) => v switch { 0 => "None", 1 => "Luhn", _ => v.ToString() };
+
+    private async Task OpenCreate()
+    {
+        var dto = new AccountDefinitionAdminDto { Id = Guid.Empty, Code = "", Normalize = 0, Algorithm = 0 };
+        var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AccountDefinitionEditDialog>("Новое определение счёта", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await LoadData();
+    }
+
+    private async Task OpenEdit(AccountDefinitionAdminDto item)
+    {
+        var copy = new AccountDefinitionAdminDto
+        {
+            Id = item.Id,
+            Code = item.Code,
+            Regex = item.Regex,
+            Normalize = item.Normalize,
+            Algorithm = item.Algorithm,
+            MinLength = item.MinLength,
+            MaxLength = item.MaxLength
+        };
+        var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AccountDefinitionEditDialog>("Изменить определение счёта", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await LoadData();
+    }
+
+    private async Task ConfirmDelete(AccountDefinitionAdminDto item)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"Удалить определение счёта «{item.Code}»?",
+            ["ButtonText"] = "Удалить",
+            ["Color"] = Color.Error
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            var (success, error) = await Api.DeleteAsync(item.Id);
+            if (success)
+            {
+                Snackbar.Add("Определение счёта удалено.", Severity.Success);
+                await LoadData();
+            }
+            else
+                Snackbar.Add(error ?? "Ошибка удаления", Severity.Error);
+        }
+    }
+}

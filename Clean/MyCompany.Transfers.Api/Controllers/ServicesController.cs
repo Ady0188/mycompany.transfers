@@ -8,7 +8,7 @@ using MyCompany.Transfers.Api.Auth;
 namespace MyCompany.Transfers.Api.Controllers;
 
 /// <summary>
-/// Административный CRUD для справочника услуг.
+/// Административный CRUD для справочника услуг. Id при создании генерируется на API (9-значное число).
 /// </summary>
 [ApiController]
 [Route("api/admin/services")]
@@ -23,21 +23,21 @@ public sealed class ServicesController : BaseController
     public ServicesController(ISender mediator) => _mediator = mediator;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetServicesQuery(), ct);
+        var result = await _mediator.Send(new GetServicesQuery(page, pageSize, search), ct);
         return Ok(result);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(string id, CancellationToken ct)
+    public async Task<IActionResult> GetById(string id, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new GetServiceByIdAdminQuery(id), ct);
         return result.Match(dto => Ok(dto), Problem);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] ServiceAdminDto dto, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] ServiceAdminDto dto, CancellationToken ct = default)
     {
         var cmd = new CreateServiceCommand(
             dto.Id,
@@ -55,7 +55,7 @@ public sealed class ServicesController : BaseController
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(string id, [FromBody] ServiceAdminDto dto, CancellationToken ct)
+    public async Task<IActionResult> Update(string id, [FromBody] ServiceAdminDto dto, CancellationToken ct = default)
     {
         var cmd = new UpdateServiceCommand(
             id,
@@ -73,7 +73,7 @@ public sealed class ServicesController : BaseController
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    public async Task<IActionResult> Delete(string id, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new DeleteServiceCommand(id), ct);
         return result.Match(_ => NoContent(), Problem);

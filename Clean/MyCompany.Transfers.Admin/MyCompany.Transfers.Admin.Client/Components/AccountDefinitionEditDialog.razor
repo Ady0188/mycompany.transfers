@@ -1,0 +1,146 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAccountDefinitionsApiService Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_model" OnValidSubmit="Submit">
+            <MudGrid Spacing="3">
+                @if (!_isCreate)
+                {
+                    <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id</MudText></MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudTextField Value="_model.Id.ToString()" Variant="Variant.Outlined" ReadOnly="true" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Код <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Code" Variant="Variant.Outlined" Required="true" RequiredError="Введите код" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Regex</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Regex" Variant="Variant.Outlined" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Normalize</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="int" @bind-Value="_model.Normalize" Variant="Variant.Outlined" Label="Normalize">
+                        <MudSelectItem T="int" Value="@(0)">None</MudSelectItem>
+                        <MudSelectItem T="int" Value="@(1)">Trim</MudSelectItem>
+                        <MudSelectItem T="int" Value="@(2)">DigitsOnly</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Algorithm</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="int" @bind-Value="_model.Algorithm" Variant="Variant.Outlined" Label="Algorithm">
+                        <MudSelectItem T="int" Value="@(0)">None</MudSelectItem>
+                        <MudSelectItem T="int" Value="@(1)">Luhn</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">MinLength</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudNumericField @bind-Value="_model.MinLength" Variant="Variant.Outlined" Min="0" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">MaxLength</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudNumericField @bind-Value="_model.MaxLength" Variant="Variant.Outlined" Min="0" Immediate="true" />
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
+                }
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton OnClick="Cancel">Отмена</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                            @(_sending ? "Сохранение…" : "Сохранить")
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public AccountDefinitionAdminDto Model { get; set; } = null!;
+    [Parameter] public bool IsCreate { get; set; }
+
+    private AccountDefinitionAdminDto _model = null!;
+    private bool _isCreate;
+    private bool _sending;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _isCreate = IsCreate;
+        _model = new AccountDefinitionAdminDto
+        {
+            Id = Model.Id,
+            Code = Model.Code ?? "",
+            Regex = Model.Regex,
+            Normalize = Model.Normalize,
+            Algorithm = Model.Algorithm,
+            MinLength = Model.MinLength,
+            MaxLength = Model.MaxLength
+        };
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _error = null;
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            if (_isCreate)
+            {
+                var dto = new AccountDefinitionAdminDto
+                {
+                    Id = Guid.Empty,
+                    Code = _model.Code,
+                    Regex = string.IsNullOrWhiteSpace(_model.Regex) ? null : _model.Regex,
+                    Normalize = _model.Normalize,
+                    Algorithm = _model.Algorithm,
+                    MinLength = _model.MinLength,
+                    MaxLength = _model.MaxLength
+                };
+                var (success, err) = await Api.CreateAsync(dto);
+                if (success)
+                {
+                    Snackbar.Add("Определение счёта создано.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                    _error = err ?? "Ошибка сохранения";
+            }
+            else
+            {
+                var (success, err) = await Api.UpdateAsync(_model.Id, _model);
+                if (success)
+                {
+                    Snackbar.Add("Определение счёта обновлено.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                    _error = err ?? "Ошибка сохранения";
+            }
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+}

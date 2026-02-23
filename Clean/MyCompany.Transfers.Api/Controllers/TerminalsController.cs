@@ -23,21 +23,21 @@ public sealed class TerminalsController : BaseController
     public TerminalsController(ISender mediator) => _mediator = mediator;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetTerminalsQuery(), ct);
+        var result = await _mediator.Send(new GetTerminalsQuery(page, pageSize, search), ct);
         return Ok(result);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(string id, CancellationToken ct)
+    public async Task<IActionResult> GetById(string id, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new GetTerminalByIdQuery(id), ct);
         return result.Match(dto => Ok(dto), Problem);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] TerminalAdminDto dto, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] TerminalAdminDto dto, CancellationToken ct = default)
     {
         var cmd = new CreateTerminalCommand(dto.Id, dto.AgentId, dto.Name, dto.ApiKey, dto.Secret, dto.Active);
         var result = await _mediator.Send(cmd, ct);
@@ -45,7 +45,7 @@ public sealed class TerminalsController : BaseController
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(string id, [FromBody] TerminalAdminDto dto, CancellationToken ct)
+    public async Task<IActionResult> Update(string id, [FromBody] TerminalAdminDto dto, CancellationToken ct = default)
     {
         var cmd = new UpdateTerminalCommand(id, dto.AgentId, dto.Name, dto.ApiKey, dto.Secret, dto.Active);
         var result = await _mediator.Send(cmd, ct);
@@ -53,7 +53,7 @@ public sealed class TerminalsController : BaseController
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    public async Task<IActionResult> Delete(string id, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new DeleteTerminalCommand(id), ct);
         return result.Match(_ => NoContent(), Problem);

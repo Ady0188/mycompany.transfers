@@ -27,10 +27,26 @@ public sealed class CachedTerminalRepository : ITerminalRepository
     public Task<bool> AnyByAgentIdAsync(string agentId, CancellationToken ct) =>
         _inner.AnyByAgentIdAsync(agentId, ct);
 
-    public async Task<IReadOnlyList<Terminal>> GetAllAsync(CancellationToken ct) =>
-        (await _cache.GetOrCreateAsync("term:all", async _ => (IReadOnlyList<Terminal>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Terminal>();
+    private const string AllKey = "term:all";
 
-    public void Add(Terminal terminal) => _inner.Add(terminal);
-    public void Update(Terminal terminal) => _inner.Update(terminal);
-    public void Remove(Terminal terminal) => _inner.Remove(terminal);
+    public async Task<IReadOnlyList<Terminal>> GetAllAsync(CancellationToken ct) =>
+        (await _cache.GetOrCreateAsync(AllKey, async _ => (IReadOnlyList<Terminal>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Terminal>();
+
+    public void Add(Terminal terminal)
+    {
+        _inner.Add(terminal);
+        _ = _cache.RemoveAsync(AllKey, default);
+    }
+
+    public void Update(Terminal terminal)
+    {
+        _inner.Update(terminal);
+        _ = _cache.RemoveAsync(AllKey, default);
+    }
+
+    public void Remove(Terminal terminal)
+    {
+        _inner.Remove(terminal);
+        _ = _cache.RemoveAsync(AllKey, default);
+    }
 }

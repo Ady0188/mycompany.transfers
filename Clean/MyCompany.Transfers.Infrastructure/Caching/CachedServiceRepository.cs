@@ -27,12 +27,28 @@ public sealed class CachedServiceRepository : IServiceRepository
     public Task<bool> AnyByAccountDefinitionIdAsync(Guid accountDefinitionId, CancellationToken ct) =>
         _inner.AnyByAccountDefinitionIdAsync(accountDefinitionId, ct);
 
-    public async Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct) =>
-        (await _cache.GetOrCreateAsync("service:all", async _ => (IReadOnlyList<Service>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Service>();
+    private const string AllKey = "service:all";
 
-    public void Add(Service service) => _inner.Add(service);
-    public void Update(Service service) => _inner.Update(service);
-    public void Remove(Service service) => _inner.Remove(service);
+    public async Task<IReadOnlyList<Service>> GetAllAsync(CancellationToken ct) =>
+        (await _cache.GetOrCreateAsync(AllKey, async _ => (IReadOnlyList<Service>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<Service>();
+
+    public void Add(Service service)
+    {
+        _inner.Add(service);
+        _ = _cache.RemoveAsync(AllKey, default);
+    }
+
+    public void Update(Service service)
+    {
+        _inner.Update(service);
+        _ = _cache.RemoveAsync(AllKey, default);
+    }
+
+    public void Remove(Service service)
+    {
+        _inner.Remove(service);
+        _ = _cache.RemoveAsync(AllKey, default);
+    }
 
     public async Task<(Service? Service, bool IsByPan)> GetByIdWithTypeAsync(string serviceId, CancellationToken ct)
     {

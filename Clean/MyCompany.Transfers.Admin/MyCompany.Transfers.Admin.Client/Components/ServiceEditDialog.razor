@@ -1,0 +1,170 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IServicesApiService Api
+@inject IProvidersApiService ProvidersApi
+@inject IAccountDefinitionsApiService AccountDefinitionsApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_model" OnValidSubmit="Submit">
+            <MudGrid Spacing="3">
+                @if (!_isCreate)
+                {
+                    <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id</MudText></MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudTextField Value="_model.Id" Variant="Variant.Outlined" ReadOnly="true" />
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12"><MudAlert Severity="Severity.Info" Dense="true">Id присваивается на сервере (9-значное число), если не указан.</MudAlert></MudItem>
+                }
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Провайдер <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="string" @bind-Value="_model.ProviderId" Variant="Variant.Outlined" Label="Провайдер" Required="@_isCreate" RequiredError="Выберите провайдера">
+                        @foreach (var p in _providers)
+                        {
+                            <MudSelectItem T="string" Value="@p.Id">@(p.Name ?? p.Id)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Определение счёта (код) <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="Guid" @bind-Value="_model.AccountDefinitionId" Variant="Variant.Outlined" Label="Код определения счёта" ToStringFunc="@(id => GetAccountDefinitionCode(id))" Required="@_isCreate" RequiredError="Выберите определение счёта">
+                        @foreach (var a in _accountDefinitions)
+                        {
+                            <MudSelectItem T="Guid" Value="@a.Id">@a.Code</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Название <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Name" Variant="Variant.Outlined" Required="true" RequiredError="Введите название" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">ProviderServiceId (код)</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.ProviderServiceId" Variant="Variant.Outlined" Immediate="true" Placeholder="Код услуги у провайдера" />
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
+                }
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton OnClick="Cancel">Отмена</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                            @(_sending ? "Сохранение…" : "Сохранить")
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ServiceAdminDto? Model { get; set; }
+    [Parameter] public bool IsCreate { get; set; }
+
+    private ServiceAdminDto _model = null!;
+    private bool _isCreate;
+    private bool _sending;
+    private string? _error;
+    private List<ProviderAdminDto> _providers = new();
+    private List<AccountDefinitionAdminDto> _accountDefinitions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isCreate = IsCreate;
+        if (_isCreate)
+        {
+            _model = new ServiceAdminDto
+            {
+                Id = "",
+                ProviderId = "",
+                ProviderServiceId = "",
+                Name = "",
+                AllowedCurrencies = Array.Empty<string>(),
+                MinAmountMinor = 10,
+                MaxAmountMinor = 10_000_000,
+                AccountDefinitionId = Guid.Empty,
+                Parameters = new List<ServiceParamDefinitionDto>()
+            };
+        }
+        else
+        {
+            _model = Model ?? new ServiceAdminDto();
+        }
+        try
+        {
+            var providersResult = await ProvidersApi.GetPagedAsync(1, 500);
+            _providers = providersResult.Items ?? new List<ProviderAdminDto>();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Не удалось загрузить провайдеров: {ex.Message}";
+        }
+        try
+        {
+            _accountDefinitions = await AccountDefinitionsApi.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = string.IsNullOrEmpty(_error) ? $"Не удалось загрузить определения счёта: {ex.Message}" : _error + " " + ex.Message;
+        }
+    }
+
+    private string GetAccountDefinitionCode(Guid id)
+    {
+        if (id == Guid.Empty) return "";
+        var a = _accountDefinitions.FirstOrDefault(x => x.Id == id);
+        return a?.Code ?? id.ToString();
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _error = null;
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            if (_isCreate)
+            {
+                var (success, err) = await Api.CreateAsync(_model);
+                if (success)
+                {
+                    Snackbar.Add("Услуга создана. Id присвоен на сервере (9-значный).", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                    _error = err ?? "Ошибка сохранения";
+            }
+            else
+            {
+                var (success, err) = await Api.UpdateAsync(_model.Id, _model);
+                if (success)
+                {
+                    Snackbar.Add("Услуга обновлена.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                    _error = err ?? "Ошибка сохранения";
+            }
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+}

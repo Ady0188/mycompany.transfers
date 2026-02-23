@@ -43,12 +43,23 @@ public sealed class CreateServiceCommandHandler : IRequestHandler<CreateServiceC
 
     public async Task<ErrorOr<ServiceAdminDto>> Handle(CreateServiceCommand cmd, CancellationToken ct)
     {
-        if (await _services.ExistsAsync(cmd.Id, ct))
-            return AppErrors.Common.Validation($"Услуга '{cmd.Id}' уже существует.");
+        var resolvedId = string.IsNullOrWhiteSpace(cmd.Id)
+            ? await GenerateUnique9DigitIdAsync(ct)
+            : cmd.Id.Trim();
+
+        if (await _services.ExistsAsync(resolvedId, ct))
+            return AppErrors.Common.Validation($"Услуга '{resolvedId}' уже существует.");
+
+        if (string.IsNullOrWhiteSpace(cmd.ProviderId))
+            return AppErrors.Common.Validation("ProviderId обязателен.");
         if (!await _providers.ExistsAsync(cmd.ProviderId, ct))
             return AppErrors.Common.Validation($"Провайдер '{cmd.ProviderId}' не найден.");
+
+        if (cmd.AccountDefinitionId == Guid.Empty)
+            return AppErrors.Common.Validation("AccountDefinitionId обязателен.");
         if (await _accountDefinitions.GetAsync(cmd.AccountDefinitionId, ct) is null)
             return AppErrors.Common.Validation($"Определение счёта с Id '{cmd.AccountDefinitionId}' не найдено.");
+
         var paramIds = (cmd.Parameters ?? new List<ServiceParamDefinitionDto>()).Select(p => p.ParameterId).Distinct().ToList();
         if (paramIds.Count > 0)
         {
@@ -59,13 +70,13 @@ public sealed class CreateServiceCommandHandler : IRequestHandler<CreateServiceC
         }
 
         var parameters = (cmd.Parameters ?? new List<ServiceParamDefinitionDto>())
-            .Select(p => new ServiceParamDefinition(cmd.Id, p.ParameterId, p.Required))
+            .Select(p => new ServiceParamDefinition(resolvedId, p.ParameterId, p.Required))
             .ToList();
 
         var service = Service.Create(
-            cmd.Id,
+            resolvedId,
             cmd.ProviderId,
-            cmd.ProviderServiceId ?? cmd.Id,
+            cmd.ProviderServiceId ?? resolvedId,
             cmd.Name,
             cmd.AllowedCurrencies ?? Array.Empty<string>(),
             cmd.MinAmountMinor,
@@ -81,5 +92,16 @@ public sealed class CreateServiceCommandHandler : IRequestHandler<CreateServiceC
         }, ct);
 
         return ServiceAdminDto.FromDomain(service);
+    }
+
+    private async Task<string> GenerateUnique9DigitIdAsync(CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            var id = Random.Shared.Next(100_000_000, 1_000_000_000).ToString();
+            if (!await _services.ExistsAsync(id, ct))
+                return id;
+        }
+        return Guid.NewGuid().ToString("N")[..9];
     }
 }
