@@ -29,6 +29,16 @@ public sealed class ParameterRepository : IParameterRepository
     public Task<bool> ExistsAsync(string id, CancellationToken ct) =>
         _db.Parameters.AnyAsync(p => p.Id == id, ct);
 
+    public async Task<string> GetNextNumericIdAsync(CancellationToken ct)
+    {
+        var ids = await _db.Parameters.AsNoTracking().Select(p => p.Id).ToListAsync(ct);
+        var next = 100;
+        foreach (var id in ids)
+            if (int.TryParse(id, out var num) && num >= 100)
+                next = Math.Max(next, num + 1);
+        return next.ToString();
+    }
+
     public Task<bool> AnyUsedByServiceAsync(string parameterId, CancellationToken ct) =>
         _db.ServiceParamDefinitions.AnyAsync(x => x.ParameterId == parameterId, ct);
 

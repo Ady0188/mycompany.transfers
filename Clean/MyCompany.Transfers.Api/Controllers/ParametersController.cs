@@ -23,29 +23,30 @@ public sealed class ParametersController : BaseController
     public ParametersController(ISender mediator) => _mediator = mediator;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetParametersQuery(), ct);
+        var result = await _mediator.Send(new GetParametersQuery(page, pageSize, search), ct);
         return Ok(result);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(string id, CancellationToken ct)
+    public async Task<IActionResult> GetById(string id, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new GetParameterByIdQuery(id), ct);
         return result.Match(dto => Ok(dto), Problem);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] ParameterAdminDto dto, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] ParameterAdminDto dto, CancellationToken ct = default)
     {
-        var cmd = new CreateParameterCommand(dto.Id, dto.Code, dto.Name, dto.Description, dto.Regex, dto.Active);
+        var id = string.IsNullOrWhiteSpace(dto.Id) ? null : dto.Id.Trim();
+        var cmd = new CreateParameterCommand(id, dto.Code, dto.Name, dto.Description, dto.Regex, dto.Active);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created), Problem);
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(string id, [FromBody] ParameterAdminDto dto, CancellationToken ct)
+    public async Task<IActionResult> Update(string id, [FromBody] ParameterAdminDto dto, CancellationToken ct = default)
     {
         var cmd = new UpdateParameterCommand(id, dto.Code, dto.Name, dto.Description, dto.Regex, dto.Active);
         var result = await _mediator.Send(cmd, ct);
@@ -53,7 +54,7 @@ public sealed class ParametersController : BaseController
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    public async Task<IActionResult> Delete(string id, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new DeleteParameterCommand(id), ct);
         return result.Match(_ => NoContent(), Problem);

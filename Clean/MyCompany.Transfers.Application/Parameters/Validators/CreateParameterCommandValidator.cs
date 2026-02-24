@@ -7,7 +7,9 @@ public sealed class CreateParameterCommandValidator : AbstractValidator<CreatePa
 {
     public CreateParameterCommandValidator()
     {
-        RuleFor(x => x.Id).NotEmpty().WithMessage("Id обязателен.").MaximumLength(64);
-        RuleFor(x => x.Code).NotEmpty().WithMessage("Code обязателен.").MaximumLength(64);
+        RuleFor(x => x.Id)
+            .MaximumLength(64).When(x => !string.IsNullOrEmpty(x.Id))
+            .WithMessage("Id не более 64 символов.");
+        RuleFor(x => x.Code).NotEmpty().WithMessage("Код обязателен.").MaximumLength(64);
     }
 }

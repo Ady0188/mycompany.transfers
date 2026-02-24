@@ -10,6 +10,8 @@ public interface IParameterRepository
     Task<ParamDefinition?> GetForUpdateAsync(string id, CancellationToken ct);
     Task<ParamDefinition?> GetByCodeAsync(string code, CancellationToken ct);
     Task<bool> ExistsAsync(string id, CancellationToken ct);
+    /// <summary>Возвращает следующий числовой Id для нового параметра (начиная с 100).</summary>
+    Task<string> GetNextNumericIdAsync(CancellationToken ct);
     Task<bool> AnyUsedByServiceAsync(string parameterId, CancellationToken ct);
     Task<Dictionary<string, ParamDefinition>> GetByIdsAsMapAsync(IEnumerable<string> ids, CancellationToken ct);
     void Add(ParamDefinition param);

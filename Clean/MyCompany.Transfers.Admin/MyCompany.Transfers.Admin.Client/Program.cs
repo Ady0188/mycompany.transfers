@@ -21,5 +21,6 @@ builder.Services.AddScoped<IProvidersApiService, ProvidersApiService>();
 builder.Services.AddScoped<IServicesApiService, ServicesApiService>();
 builder.Services.AddScoped<IAccountDefinitionsApiService, AccountDefinitionsApiService>();
 builder.Services.AddScoped<ITerminalsApiService, TerminalsApiService>();
+builder.Services.AddScoped<IParametersApiService, ParametersApiService>();
 
 await builder.Build().RunAsync();

@@ -8,7 +8,7 @@ using MyCompany.Transfers.Domain.Services;
 namespace MyCompany.Transfers.Application.Parameters.Commands;
 
 public sealed record CreateParameterCommand(
-    string Id,
+    string? Id,
     string Code,
     string? Name,
     string? Description,
@@ -28,10 +28,13 @@ public sealed class CreateParameterCommandHandler : IRequestHandler<CreateParame
 
     public async Task<ErrorOr<ParameterAdminDto>> Handle(CreateParameterCommand cmd, CancellationToken ct)
     {
-        if (await _parameters.ExistsAsync(cmd.Id, ct))
-            return AppErrors.Common.Validation($"Параметр '{cmd.Id}' уже существует.");
+        var id = string.IsNullOrWhiteSpace(cmd.Id)
+            ? await _parameters.GetNextNumericIdAsync(ct)
+            : cmd.Id.Trim();
+        if (await _parameters.ExistsAsync(id, ct))
+            return AppErrors.Common.Validation($"Параметр с Id '{id}' уже существует.");
 
-        var param = ParamDefinition.Create(cmd.Id, cmd.Code, cmd.Name, cmd.Description, cmd.Regex, cmd.Active);
+        var param = ParamDefinition.Create(id, cmd.Code, cmd.Name, cmd.Description, cmd.Regex, cmd.Active);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {

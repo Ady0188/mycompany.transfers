@@ -85,6 +85,36 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.Id).HasMaxLength(64);
             eb.Property(x => x.Code).HasMaxLength(64).IsRequired();
             eb.ToTable("ParamDefinition");
+            eb.HasData(
+                new { Id = "100", Code = "sender_doc_type", Name = "Тип удостоверяющего документа плательщика", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "101", Code = "sender_doc_number", Name = "Серия и номер документа", Description = (string?)null, Regex = "^[A-Z0-9]+$", Active = true },
+                new { Id = "102", Code = "sender_phone", Name = "Номер мобильного телефона плательщика", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "103", Code = "sender_doc_department_code", Name = "Код подразделения, выдавшего паспорт", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "104", Code = "sender_residency", Name = "Резидентство плательщика: 1 – резидент РТ, 0 – нерезидент.", Description = (string?)null, Regex = "^(1{1}|2{1})$", Active = true },
+                new { Id = "105", Code = "account_number", Name = "Номер счёта плательщика", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "106", Code = "sender_doc_issue_date", Name = "Дата выдачи документа", Description = (string?)null, Regex = "^(19|20)\\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$", Active = true },
+                new { Id = "107", Code = "sender_fullname_cyr", Name = "Полное ФИО плательщика (кириллицей)", Description = (string?)null, Regex = "^[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*\\s[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*(?:\\s[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*)?$", Active = true },
+                new { Id = "108", Code = "sender_firstname_cyr", Name = "Фамилия плательщика (кириллицей)", Description = (string?)null, Regex = "^[А-Яа-яЁё\\s\\-]+$", Active = true },
+                new { Id = "109", Code = "sender_lastname_cyr", Name = "Имя плательщика (кириллицей)", Description = (string?)null, Regex = "^[А-Яа-яЁё\\s\\-]+$", Active = true },
+                new { Id = "110", Code = "sender_middlename_cyr", Name = "Отчество плательщика (кириллицей)", Description = (string?)null, Regex = "^[А-Яа-яЁё\\s\\-]+$", Active = true },
+                new { Id = "111", Code = "receiver_fullname_cyr", Name = "Полное ФИО получателя (кириллицей)", Description = (string?)null, Regex = "^[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*\\s[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*(?:\\s[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*)?$", Active = true },
+                new { Id = "112", Code = "receiver_firstname_cyr", Name = "Имя получателя (кириллицей)", Description = (string?)null, Regex = "^[А-Яа-яЁё\\s\\-]+$", Active = true },
+                new { Id = "113", Code = "receiver_lastname_cyr", Name = "Фамилия получателя (кириллицей)", Description = (string?)null, Regex = "^[А-Яа-яЁё\\s\\-]+$", Active = true },
+                new { Id = "114", Code = "receiver_middlename_cyr", Name = "Отчество получателя (кириллицей)", Description = (string?)null, Regex = "^[А-Яа-яЁё\\s\\-]+$", Active = true },
+                new { Id = "115", Code = "sender_fullname", Name = "Полное ФИО плательщика \"Фамилия Имя Отчество\"", Description = (string?)null, Regex = "^[A-Za-z]+(?:-[A-Za-z]+)*\\s[A-Za-z]+(?:-[A-Za-z]+)*(?:\\s[A-Za-z]+(?:-[A-Za-z]+)*)?$", Active = true },
+                new { Id = "116", Code = "sender_lastname", Name = "Фамилия плательщика", Description = (string?)null, Regex = "^[A-Za-z\\s\\-]+$", Active = true },
+                new { Id = "117", Code = "sender_firstname", Name = "Имя плательщика", Description = (string?)null, Regex = "^[A-Za-z\\s\\-]+$", Active = true },
+                new { Id = "118", Code = "sender_middlename", Name = "Отчество плательщика", Description = (string?)null, Regex = "^[A-Za-z\\s\\-]+$", Active = true },
+                new { Id = "119", Code = "sender_doc_issuer", Name = "Орган, выдавший документ", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "120", Code = "sender_birth_place", Name = "Место рождения плательщика", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "121", Code = "sender_citizenship", Name = "Гражданство плательщика", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "122", Code = "sender_registration_address", Name = "Адрес регистрации: страна, регион, город, улица, дом, квартира и т.п.", Description = (string?)null, Regex = (string?)null, Active = true },
+                new { Id = "123", Code = "receiver_fullname", Name = "Полное ФИО получателя", Description = (string?)null, Regex = "^[A-Za-z]+(?:-[A-Za-z]+)*\\s[A-Za-z]+(?:-[A-Za-z]+)*(?:\\s[A-Za-z]+(?:-[A-Za-z]+)*)?$", Active = true },
+                new { Id = "124", Code = "receiver_firstname", Name = "Имя получателя", Description = (string?)null, Regex = "^[A-Za-z\\s\\-]+$", Active = true },
+                new { Id = "125", Code = "receiver_lastname", Name = "Фамилия получателя", Description = (string?)null, Regex = "^[A-Za-z\\s\\-]+$", Active = true },
+                new { Id = "126", Code = "receiver_middlename", Name = "Отчество получателя", Description = (string?)null, Regex = "^[A-Za-z\\s\\-]+$", Active = true },
+                new { Id = "127", Code = "sender_birth_date", Name = "Дата рождения плательщика", Description = (string?)null, Regex = "^(19|20)\\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$", Active = true }
+            );
         });
 
         b.Entity<ServiceParamDefinition>(eb =>
@@ -168,6 +198,10 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.HasKey(x => x.Id);
             eb.Property(x => x.Code).HasMaxLength(64).IsRequired();
             eb.ToTable("AccountDefinitions");
+            eb.HasData(
+                new { Id = Guid.Parse("1744710c-a062-4c33-8077-756db29a06b6"), Code = "PHONE", Regex = "^\\d{9,15}$", Normalize = 2, Algorithm = 0, MinLength = 9, MaxLength = 15 },
+                new { Id = Guid.Parse("3fcdac91-5f18-425b-945f-169d539b6bde"), Code = "PAN", Regex = "^\\d{16}$", Normalize = 2, Algorithm = 1, MinLength = 16, MaxLength = 16 }
+            );
         });
     }
 

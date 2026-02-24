@@ -42,6 +42,9 @@ public sealed class CachedParameterRepository : IParameterRepository
     public Task<bool> ExistsAsync(string id, CancellationToken ct) =>
         _cache.GetOrCreateAsync($"param:exists:{id}", _ => _inner.ExistsAsync(id, ct), Ttl, ct);
 
+    public Task<string> GetNextNumericIdAsync(CancellationToken ct) =>
+        _inner.GetNextNumericIdAsync(ct);
+
     public Task<bool> AnyUsedByServiceAsync(string parameterId, CancellationToken ct) =>
         _inner.AnyUsedByServiceAsync(parameterId, ct);
 

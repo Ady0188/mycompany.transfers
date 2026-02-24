@@ -1,0 +1,115 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IParametersApiService Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_model" OnValidSubmit="Submit">
+            <MudGrid Spacing="3">
+                @if (!_isCreate)
+                {
+                    <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id</MudText></MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudTextField @bind-Value="_model.Id" Variant="Variant.Outlined" ReadOnly="true" Immediate="true" />
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12" md="12"><MudAlert Severity="Severity.Info" Dense="true">Id будет присвоен автоматически (счётчик с 100).</MudAlert></MudItem>
+                }
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Код <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Code" Variant="Variant.Outlined" Required="true" RequiredError="Введите код" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Название</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Name" Variant="Variant.Outlined" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Описание</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Description" Variant="Variant.Outlined" Immediate="true" Lines="2" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Regex</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Regex" Variant="Variant.Outlined" Immediate="true" Placeholder="Регулярное выражение для валидации" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Активен</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSwitch @bind-Value="_model.Active" Color="Color.Primary" />
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
+                }
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton OnClick="Cancel">Отмена</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                            @(_sending ? "Сохранение…" : "Сохранить")
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ParameterAdminDto Model { get; set; } = null!;
+    [Parameter] public bool IsCreate { get; set; }
+
+    private ParameterAdminDto _model = null!;
+    private bool _isCreate;
+    private bool _sending;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _isCreate = IsCreate;
+        _model = new ParameterAdminDto
+        {
+            Id = _isCreate ? "" : (Model.Id ?? ""),
+            Code = Model.Code ?? "",
+            Name = Model.Name,
+            Description = Model.Description,
+            Regex = Model.Regex,
+            Active = Model.Active
+        };
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _error = null;
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            var (success, err) = _isCreate
+                ? await Api.CreateAsync(_model)
+                : await Api.UpdateAsync(_model.Id, _model);
+            if (success)
+            {
+                Snackbar.Add(_isCreate ? "Параметр создан." : "Параметр обновлён.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+                _error = err ?? "Ошибка сохранения";
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+}
