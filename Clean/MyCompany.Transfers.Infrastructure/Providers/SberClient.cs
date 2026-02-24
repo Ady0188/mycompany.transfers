@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
@@ -7,19 +6,23 @@ using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
 using MyCompany.Transfers.Infrastructure.Providers.Responses.Sber;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 
 public sealed class SberClient : IProviderClient
 {
     public string ProviderId => "Sber";
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<SberClient> _logger;
 
-    public SberClient(IHttpClientFactory httpFactory, ILogger<SberClient> logger)
+    public SberClient(IHttpClientFactory httpFactory, ILogger<SberClient> logger, IServiceScopeFactory scopeFactory)
     {
         _httpFactory = httpFactory;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<ProviderResult> SendAsync(Provider provider, ProviderRequest request, CancellationToken ct)
@@ -36,9 +39,19 @@ public sealed class SberClient : IProviderClient
                 return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(), $"Sber '{key}' not set");
         }
 
-        var http = _httpFactory.CreateClient("Sber");
-        http.BaseAddress = new Uri(provider.BaseUrl);
-        http.Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30);
+        using var scope = _scopeFactory.CreateScope();
+        var providerHttpHandlerCache = scope.ServiceProvider.GetRequiredService<IProviderHttpHandlerCache>();
+        //var http = _httpFactory.CreateClient("Sber");
+        //http.BaseAddress = new Uri(provider.BaseUrl);
+        //http.Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30);
+
+        var handler = providerHttpHandlerCache.GetOrCreate(provider.Id, settings);
+
+        using var http = new HttpClient(handler, disposeHandler: false)
+        {
+            BaseAddress = new Uri(provider.BaseUrl),
+            Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30)
+        };
 
         if (string.Equals(request.Operation, "prepare", StringComparison.OrdinalIgnoreCase))
             return await PrepareAsync(http, request, settings, ct);
@@ -133,8 +146,26 @@ public sealed class SberClient : IProviderClient
 
     private static string GenerateRqUID()
     {
+        //var buffer = new byte[16];
+        //RandomNumberGenerator.Fill(buffer);
+        //return Convert.ToHexString(buffer).ToLowerInvariant();
+
+        // Create a 16-byte array to hold the random bytes
         var buffer = new byte[16];
-        RandomNumberGenerator.Fill(buffer);
-        return Convert.ToHexString(buffer).ToLowerInvariant();
+
+        // Generate 16 random bytes using a cryptographically secure random number generator
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(buffer);
+        }
+
+        // Convert the bytes to a hexadecimal string
+        var hex = new StringBuilder(32);
+        foreach (var b in buffer)
+        {
+            hex.Append(b.ToString("x2")); // Format each byte as a 2-digit hexadecimal string
+        }
+
+        return hex.ToString();
     }
 }

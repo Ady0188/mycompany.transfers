@@ -47,11 +47,11 @@ public sealed class IPSClient : IProviderClient
         return request.Operation.ToLowerInvariant() switch
         {
             "check" => await SendXmlAsync<Check3DCardResponse>(http, request, op, encryptKeyPath,
-                r => MapIPSResult(r.Body?.Check3DCardRes?.Result, OutboxStatus.SENDING, "check"), ct),
+                r => MapIPSResult(r.Body?.Check3DCardRes?.Result, request.TransferId, OutboxStatus.SENDING, "check"), ct),
             "credita2c" => await SendXmlAsync<CreditA2CResponse>(http, request, op, encryptKeyPath,
-                r => MapIPSResult(r.Body?.CreditA2CCipherRes?.Result, OutboxStatus.SENDING, "credita2c"), ct),
+                r => MapIPSResult(r.Body?.CreditA2CCipherRes?.Result, request.TransferId, OutboxStatus.STATUS, "credita2c"), ct),
             "confirm" => await SendXmlAsync<ConfirmCreditResponse>(http, request, op, encryptKeyPath,
-                r => MapIPSResult(r.Body?.ConfirmCreditRes?.Result, OutboxStatus.SUCCESS, "confirm"), ct),
+                r => MapIPSResult(r.Body?.ConfirmCreditRes?.Result, request.TransferId, OutboxStatus.SUCCESS, "confirm"), ct),
             _ => new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
                 $"Unsupported operation '{request.Operation}'")
         };
@@ -102,12 +102,16 @@ public sealed class IPSClient : IProviderClient
         return mapResult(dto);
     }
 
-    private static ProviderResult MapIPSResult(Result? result, OutboxStatus successStatus, string op)
+    private static ProviderResult MapIPSResult(Result? result, string transferId, OutboxStatus successStatus, string op)
     {
         var dict = new Dictionary<string, string>();
         var code = result?.Code ?? -1;
         var desc = result?.Description ?? "No description";
-        if (code != 0)
+        if (code == 59 && desc.Contains(transferId))
+        {
+            return new ProviderResult(OutboxStatus.STATUS, dict, desc);
+        }
+        else if (code != 0)
         {
             dict["errorCode"] = code.ToString();
             return new ProviderResult(OutboxStatus.FAILED, dict, desc);

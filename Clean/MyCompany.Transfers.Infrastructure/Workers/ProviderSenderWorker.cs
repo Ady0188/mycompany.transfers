@@ -48,9 +48,11 @@ internal sealed class ProviderSenderWorker : BackgroundService
                         agentRepository,
                         unitOfWork,
                         stoppingToken);
-                }
 
-                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                }
+                else
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
             catch
             {
@@ -199,6 +201,22 @@ internal sealed class ProviderSenderWorker : BackgroundService
                     providerTransferId: null,
                     kind: ProviderResultKind.Success,
                     status: OutboxStatus.SUCCESS);
+            }
+            else if (providerResult.Status == OutboxStatus.SENDING || providerResult.Status == OutboxStatus.STATUS)
+            {
+                msg.SetReceivedParams(providerResult.ResponseFields);
+                outboxRepository.Update(msg);
+
+                transfer.SetReceivedParams(providerResult.ResponseFields);
+                transferRepository.Update(transfer);
+
+                msg.ApplyProviderResult(
+                    nowUtc,
+                    providerCode: "0",
+                    description: "OK",
+                    providerTransferId: null,
+                    kind: ProviderResultKind.Success,
+                    status: providerResult.Status);
             }
             else
             {

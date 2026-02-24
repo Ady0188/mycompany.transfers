@@ -104,6 +104,14 @@ public sealed class TBankClient : IProviderClient
             dict["conversion_rate"] = result.ConversionRateBuy.Rate.ToString().Replace(",", ".");
             dict["conversion_base_rate"] = result.ConversionRateBuy.BaseRate.ToString().Replace(",", ".");
         }
+        else
+        {
+            dict["conversion_orig_curr"] = "RUB";
+            dict["conversion_settl_curr"] = "RUB";
+            dict["conversion_rate"] = "1";
+            dict["conversion_base_rate"] = "1";
+        }
+
         return new ProviderResult(status, dict, "OK");
     }
 

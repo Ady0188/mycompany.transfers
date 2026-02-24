@@ -85,8 +85,10 @@ public sealed class FIMIClient : IProviderClient
         var resultDict = new Dictionary<string, string>();
         var status = (parse.Result.Result == 1 && !string.IsNullOrWhiteSpace(parse.Result.ApprovalCode))
             ? OutboxStatus.SUCCESS : OutboxStatus.FAILED;
+
         if (status == OutboxStatus.FAILED)
             resultDict["errorCode"] = parse.Result.Result.ToString();
+
         return new ProviderResult(status, resultDict,
             status == OutboxStatus.SUCCESS ? null : "Declined/No approval code");
     }

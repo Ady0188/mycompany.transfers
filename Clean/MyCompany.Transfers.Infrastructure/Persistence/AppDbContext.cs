@@ -10,6 +10,7 @@ using MyCompany.Transfers.Domain.Rates;
 using MyCompany.Transfers.Domain.Services;
 using MyCompany.Transfers.Domain.Transfers;
 using System.Text.Json;
+using MyCompany.Transfers.Domain.Accounts.Enums;
 
 namespace MyCompany.Transfers.Infrastructure.Persistence;
 
@@ -199,8 +200,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.Code).HasMaxLength(64).IsRequired();
             eb.ToTable("AccountDefinitions");
             eb.HasData(
-                new { Id = Guid.Parse("1744710c-a062-4c33-8077-756db29a06b6"), Code = "PHONE", Regex = "^\\d{9,15}$", Normalize = 2, Algorithm = 0, MinLength = 9, MaxLength = 15 },
-                new { Id = Guid.Parse("3fcdac91-5f18-425b-945f-169d539b6bde"), Code = "PAN", Regex = "^\\d{16}$", Normalize = 2, Algorithm = 1, MinLength = 16, MaxLength = 16 }
+                new { Id = Guid.Parse("1744710c-a062-4c33-8077-756db29a06b6"), Code = "PHONE", Regex = "^\\d{9,15}$", Normalize = AccountNormalizeMode.DigitsOnly, Algorithm = AccountAlgorithm.None, MinLength = 9, MaxLength = 15 },
+                new { Id = Guid.Parse("3fcdac91-5f18-425b-945f-169d539b6bde"), Code = "PAN", Regex = "^\\d{16}$", Normalize = AccountNormalizeMode.DigitsOnly, Algorithm = AccountAlgorithm.Luhn, MinLength = 16, MaxLength = 16 }
             );
         });
     }
