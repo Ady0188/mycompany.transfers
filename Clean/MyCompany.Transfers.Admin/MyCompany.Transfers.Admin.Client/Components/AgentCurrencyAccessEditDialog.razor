@@ -1,0 +1,106 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAgentCurrencyAccessApiService Api
+@inject IAgentsApiService AgentsApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_model" OnValidSubmit="Submit">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Агент <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="string" @bind-Value="_model.AgentId" Variant="Variant.Outlined" Label="Агент" Required="true" RequiredError="Выберите агента" Disabled="!_isCreate">
+                        @foreach (var a in _agents)
+                        {
+                            <MudSelectItem T="string" Value="@a.Id">@(a.Name ?? a.Id)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Валюта <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Currency" Variant="Variant.Outlined" Label="Код валюты (например TJS, USD)" Required="true" RequiredError="Введите код валюты" Immediate="true" MaxLength="3" Disabled="!_isCreate" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Включён</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSwitch @bind-Value="_model.Enabled" Color="Color.Primary" />
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
+                }
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton OnClick="Cancel">Отмена</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                            @(_sending ? "Сохранение…" : "Сохранить")
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public AgentCurrencyAccessAdminDto Model { get; set; } = null!;
+    [Parameter] public bool IsCreate { get; set; }
+
+    private AgentCurrencyAccessAdminDto _model = null!;
+    private bool _isCreate;
+    private bool _sending;
+    private string? _error;
+    private List<AgentAdminDto> _agents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isCreate = IsCreate;
+        _model = new AgentCurrencyAccessAdminDto
+        {
+            AgentId = Model.AgentId ?? "",
+            Currency = Model.Currency ?? "",
+            Enabled = Model.Enabled
+        };
+        try
+        {
+            var result = await AgentsApi.GetPagedAsync(1, 500);
+            _agents = result.Items?.ToList() ?? new List<AgentAdminDto>();
+        }
+        catch
+        {
+            _agents = new List<AgentAdminDto>();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _error = null;
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            var (success, err) = _isCreate
+                ? await Api.CreateAsync(_model)
+                : await Api.UpdateAsync(_model.AgentId, _model.Currency, _model);
+            if (success)
+            {
+                Snackbar.Add(_isCreate ? "Доступ создан." : "Доступ обновлён.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+                _error = err ?? "Ошибка сохранения";
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+}

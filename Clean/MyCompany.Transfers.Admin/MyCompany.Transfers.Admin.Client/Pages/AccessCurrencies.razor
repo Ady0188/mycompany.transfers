@@ -1,6 +1,135 @@
 @page "/access-currencies"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAgentCurrencyAccessApiService Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Доступы (валюты) — Админ-панель</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Доступы агент–валюта</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">Управление доступами агентов к валютам. CRUD: api/admin/access/currencies</MudText>
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4" GutterBottom="false">Доступы (валюты)</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">
+            Добавить
+        </MudButton>
+    </MudStack>
+
+    <MudCard Elevation="2">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+            <MudTextField @bind-Value="_search" Label="Поиск (агент, валюта)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="true" Style="max-width: 320px;" />
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="AgentCurrencyAccessAdminDto" Items="@_filteredItems" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Агент</MudTh>
+                <MudTh>Валюта</MudTh>
+                <MudTh>Включён</MudTh>
+                <MudTh Style="width: 120px;">Действия</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Агент">@context.AgentId</MudTd>
+                <MudTd DataLabel="Валюта">@context.Currency</MudTd>
+                <MudTd DataLabel="Включён">@(context.Enabled ? "Да" : "Нет")</MudTd>
+                <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudCard>
+</MudStack>
+
+@code {
+    private bool _loading = true;
+    private string _search = "";
+    private List<AgentCurrencyAccessAdminDto> _items = new();
+    private IEnumerable<AgentCurrencyAccessAdminDto> _filteredItems => string.IsNullOrWhiteSpace(_search)
+        ? _items
+        : _items.Where(a =>
+            (a.AgentId?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (a.Currency?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _items = await Api.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            _items = new List<AgentCurrencyAccessAdminDto>();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenCreate()
+    {
+        var dto = new AgentCurrencyAccessAdminDto { AgentId = "", Currency = "", Enabled = true };
+        var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AgentCurrencyAccessEditDialog>("Новый доступ (агент–валюта)", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await LoadData();
+    }
+
+    private async Task OpenEdit(AgentCurrencyAccessAdminDto item)
+    {
+        var loaded = await Api.GetByKeyAsync(item.AgentId, item.Currency);
+        if (loaded is null)
+        {
+            Snackbar.Add("Доступ не найден.", Severity.Warning);
+            return;
+        }
+        var parameters = new DialogParameters { ["Model"] = loaded, ["IsCreate"] = false };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AgentCurrencyAccessEditDialog>("Изменить доступ", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await LoadData();
+    }
+
+    private async Task ConfirmDelete(AgentCurrencyAccessAdminDto item)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"Удалить доступ агент «{item.AgentId}» – валюта «{item.Currency}»?",
+            ["ButtonText"] = "Удалить",
+            ["Color"] = Color.Error
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            var (success, error) = await Api.DeleteAsync(item.AgentId, item.Currency);
+            if (success)
+            {
+                Snackbar.Add("Доступ удалён.", Severity.Success);
+                await LoadData();
+            }
+            else
+                Snackbar.Add(error ?? "Ошибка удаления", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,129 @@
+@using MudBlazor
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IAgentServiceAccessApiService Api
+@inject IAgentsApiService AgentsApi
+@inject IServicesApiService ServicesApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_model" OnValidSubmit="Submit">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Агент <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="string" @bind-Value="_model.AgentId" Variant="Variant.Outlined" Label="Агент" Required="true" RequiredError="Выберите агента" Disabled="!_isCreate">
+                        @foreach (var a in _agents)
+                        {
+                            <MudSelectItem T="string" Value="@a.Id">@(a.Name ?? a.Id)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Услуга <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="string" @bind-Value="_model.ServiceId" Variant="Variant.Outlined" Label="Услуга" Required="true" RequiredError="Выберите услугу" Disabled="!_isCreate">
+                        @foreach (var s in _services)
+                        {
+                            <MudSelectItem T="string" Value="@s.Id">@(s.Name ?? s.Id)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Включён</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSwitch @bind-Value="_model.Enabled" Color="Color.Primary" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Комиссия (промилле)</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudNumericField @bind-Value="_model.FeePermille" Variant="Variant.Outlined" Min="0" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Комиссия фикс (минор)</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudNumericField @bind-Value="_model.FeeFlatMinor" Variant="Variant.Outlined" Min="0" Immediate="true" />
+                </MudItem>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
+                }
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton OnClick="Cancel">Отмена</MudButton>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_sending">
+                            @(_sending ? "Сохранение…" : "Сохранить")
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public AgentServiceAccessAdminDto Model { get; set; } = null!;
+    [Parameter] public bool IsCreate { get; set; }
+
+    private AgentServiceAccessAdminDto _model = null!;
+    private bool _isCreate;
+    private bool _sending;
+    private string? _error;
+    private List<AgentAdminDto> _agents = new();
+    private List<ServiceAdminDto> _services = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isCreate = IsCreate;
+        _model = new AgentServiceAccessAdminDto
+        {
+            AgentId = Model.AgentId ?? "",
+            ServiceId = Model.ServiceId ?? "",
+            Enabled = Model.Enabled,
+            FeePermille = Model.FeePermille,
+            FeeFlatMinor = Model.FeeFlatMinor
+        };
+        try
+        {
+            var agentsTask = AgentsApi.GetPagedAsync(1, 500);
+            var servicesTask = ServicesApi.GetPagedAsync(1, 500);
+            await Task.WhenAll(agentsTask, servicesTask);
+            _agents = agentsTask.Result.Items?.ToList() ?? new List<AgentAdminDto>();
+            _services = servicesTask.Result.Items?.ToList() ?? new List<ServiceAdminDto>();
+        }
+        catch
+        {
+            _agents = new List<AgentAdminDto>();
+            _services = new List<ServiceAdminDto>();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _error = null;
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            var (success, err) = _isCreate
+                ? await Api.CreateAsync(_model)
+                : await Api.UpdateAsync(_model.AgentId, _model.ServiceId, _model);
+            if (success)
+            {
+                Snackbar.Add(_isCreate ? "Доступ создан." : "Доступ обновлён.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+                _error = err ?? "Ошибка сохранения";
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+}
