@@ -14,10 +14,12 @@ public sealed class Agent : IAggregateRoot
     public string SettingsJson { get; private set; } = "{}";
     /// <summary>Почта партнёра для отправки данных терминалов (подстановка «Кому»).</summary>
     public string? PartnerEmail { get; private set; }
+    /// <summary>Локаль агента (например, "ru" или "en"). Влияет на тексты писем и прочие человекочитаемые значения.</summary>
+    public string Locale { get; private set; } = "ru";
 
     private Agent() { }
 
-    private Agent(string id, string name, string account, string timeZoneId, string settingsJson, string? partnerEmail)
+    private Agent(string id, string name, string account, string timeZoneId, string settingsJson, string? partnerEmail, string locale)
     {
         Id = id;
         Name = name ?? "";
@@ -25,12 +27,13 @@ public sealed class Agent : IAggregateRoot
         TimeZoneId = timeZoneId;
         SettingsJson = settingsJson;
         PartnerEmail = partnerEmail;
+        Locale = NormalizeLocale(locale);
     }
 
     /// <summary>
     /// Фабрика создания агента (DDD). Гарантирует инварианты и значения по умолчанию.
     /// </summary>
-    public static Agent Create(string id, string account, string? name = null, string? timeZoneId = null, string? settingsJson = null, string? partnerEmail = null)
+    public static Agent Create(string id, string account, string? name = null, string? timeZoneId = null, string? settingsJson = null, string? partnerEmail = null, string? locale = null)
     {
         if (string.IsNullOrWhiteSpace(id))
             throw new DomainException("Id агента обязателен.");
@@ -42,13 +45,14 @@ public sealed class Agent : IAggregateRoot
             account.Trim(),
             string.IsNullOrWhiteSpace(timeZoneId) ? "Asia/Dushanbe" : timeZoneId,
             string.IsNullOrWhiteSpace(settingsJson) ? "{}" : settingsJson,
-            partnerEmail);
+            partnerEmail,
+            locale ?? "ru");
     }
 
     /// <summary>
     /// Обновление профиля агента (название, счёт, часовой пояс и/или настройки). Пустые значения не меняют текущие.
     /// </summary>
-    public void UpdateProfile(string? name = null, string? account = null, string? timeZoneId = null, string? settingsJson = null, string? partnerEmail = null)
+    public void UpdateProfile(string? name = null, string? account = null, string? timeZoneId = null, string? settingsJson = null, string? partnerEmail = null, string? locale = null)
     {
         if (name != null)
             Name = name.Trim();
@@ -60,6 +64,21 @@ public sealed class Agent : IAggregateRoot
             SettingsJson = settingsJson;
         if (partnerEmail is not null)
             PartnerEmail = partnerEmail;
+        if (locale is not null)
+            Locale = NormalizeLocale(locale);
+    }
+
+    private static string NormalizeLocale(string? locale)
+    {
+        if (string.IsNullOrWhiteSpace(locale))
+            return "ru";
+        var norm = locale.Trim().ToLowerInvariant();
+        return norm switch
+        {
+            "en" or "en-us" or "en-gb" => "en",
+            "ru" or "ru-ru" => "ru",
+            _ => "ru"
+        };
     }
 
     public bool HasSufficientBalance(string currency, long amountMinor) =>

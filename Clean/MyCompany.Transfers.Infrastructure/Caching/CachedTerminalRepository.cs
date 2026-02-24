@@ -35,18 +35,33 @@ public sealed class CachedTerminalRepository : ITerminalRepository
     public void Add(Terminal terminal)
     {
         _inner.Add(terminal);
+        var id = terminal.Id;
         _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"term:id:{id}", default);
+        _ = _cache.RemoveAsync($"term:exists:{id}", default);
+        if (!string.IsNullOrWhiteSpace(terminal.ApiKey))
+            _ = _cache.RemoveAsync($"term:apikey:{terminal.ApiKey}", default);
     }
 
     public void Update(Terminal terminal)
     {
         _inner.Update(terminal);
+        var id = terminal.Id;
         _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"term:id:{id}", default);
+        _ = _cache.RemoveAsync($"term:exists:{id}", default);
+        if (!string.IsNullOrWhiteSpace(terminal.ApiKey))
+            _ = _cache.RemoveAsync($"term:apikey:{terminal.ApiKey}", default);
     }
 
     public void Remove(Terminal terminal)
     {
+        var id = terminal.Id;
         _inner.Remove(terminal);
         _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"term:id:{id}", default);
+        _ = _cache.RemoveAsync($"term:exists:{id}", default);
+        if (!string.IsNullOrWhiteSpace(terminal.ApiKey))
+            _ = _cache.RemoveAsync($"term:apikey:{terminal.ApiKey}", default);
     }
 }

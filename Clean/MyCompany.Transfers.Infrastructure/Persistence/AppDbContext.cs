@@ -73,6 +73,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.TimeZoneId).IsRequired().HasMaxLength(64).HasDefaultValue("Asia/Dushanbe");
             eb.Property(x => x.SettingsJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
             eb.Property(x => x.PartnerEmail).HasMaxLength(256);
+            eb.Property(x => x.Locale).IsRequired().HasMaxLength(8).HasDefaultValue("ru");
         });
 
         b.Entity<Terminal>(eb =>

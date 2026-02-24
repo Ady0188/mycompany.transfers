@@ -22,4 +22,7 @@ public sealed class AgentAdminDto
 
     [JsonPropertyName("partnerEmail")]
     public string? PartnerEmail { get; set; }
+
+    [JsonPropertyName("locale")]
+    public string Locale { get; set; } = "ru";
 }

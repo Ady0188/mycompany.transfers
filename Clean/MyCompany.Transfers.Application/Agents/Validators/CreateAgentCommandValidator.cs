@@ -13,5 +13,9 @@ public sealed class CreateAgentCommandValidator : AbstractValidator<CreateAgentC
         RuleFor(x => x.Account)
             .NotEmpty().WithMessage("Счёт обязателен для проводок.")
             .MaximumLength(128);
+        RuleFor(x => x.Locale)
+            .NotEmpty().WithMessage("Locale обязателен.")
+            .Must(l => l is "ru" or "en")
+            .WithMessage("Locale должен быть 'ru' или 'en'.");
     }
 }

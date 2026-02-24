@@ -8,6 +8,7 @@ public sealed class CachedAccountDefinitionRepository : IAccountDefinitionReposi
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(120);
     private readonly IAccountDefinitionRepository _inner;
     private readonly ICacheService _cache;
+    private const string AllKey = "acc-def:all";
 
     public CachedAccountDefinitionRepository(IAccountDefinitionRepository inner, ICacheService cache) =>
         (_inner, _cache) = (inner, cache);
@@ -22,12 +23,41 @@ public sealed class CachedAccountDefinitionRepository : IAccountDefinitionReposi
         _cache.GetOrCreateAsync($"acc-def:exists:{id}", _ => _inner.ExistsAsync(id, ct), Ttl, ct);
 
     public async Task<IReadOnlyList<AccountDefinition>> GetAllAsync(CancellationToken ct = default) =>
-        (await _cache.GetOrCreateAsync("acc-def:all", async _ => (IReadOnlyList<AccountDefinition>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<AccountDefinition>();
+        (await _cache.GetOrCreateAsync(AllKey, async _ => (IReadOnlyList<AccountDefinition>?)await _inner.GetAllAsync(ct), Ttl, ct)) ?? Array.Empty<AccountDefinition>();
 
     public Task<AccountDefinition?> GetByCodeAsync(string code, CancellationToken ct = default) =>
         _cache.GetOrCreateAsync($"acc-def:by-code:{code.Trim().ToUpperInvariant()}", _ => _inner.GetByCodeAsync(code, ct), Ttl, ct);
 
-    public void Add(AccountDefinition entity) => _inner.Add(entity);
-    public void Update(AccountDefinition entity) => _inner.Update(entity);
-    public void Remove(AccountDefinition entity) => _inner.Remove(entity);
+    public void Add(AccountDefinition entity)
+    {
+        _inner.Add(entity);
+        var id = entity.Id;
+        var code = entity.Code.Trim().ToUpperInvariant();
+        _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"acc-def:by-id:{id}", default);
+        _ = _cache.RemoveAsync($"acc-def:exists:{id}", default);
+        _ = _cache.RemoveAsync($"acc-def:by-code:{code}", default);
+    }
+
+    public void Update(AccountDefinition entity)
+    {
+        _inner.Update(entity);
+        var id = entity.Id;
+        var code = entity.Code.Trim().ToUpperInvariant();
+        _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"acc-def:by-id:{id}", default);
+        _ = _cache.RemoveAsync($"acc-def:exists:{id}", default);
+        _ = _cache.RemoveAsync($"acc-def:by-code:{code}", default);
+    }
+
+    public void Remove(AccountDefinition entity)
+    {
+        var id = entity.Id;
+        var code = entity.Code.Trim().ToUpperInvariant();
+        _inner.Remove(entity);
+        _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"acc-def:by-id:{id}", default);
+        _ = _cache.RemoveAsync($"acc-def:exists:{id}", default);
+        _ = _cache.RemoveAsync($"acc-def:by-code:{code}", default);
+    }
 }

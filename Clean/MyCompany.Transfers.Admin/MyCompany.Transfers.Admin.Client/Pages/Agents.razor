@@ -35,6 +35,7 @@
                 <MudTh>Название</MudTh>
                 <MudTh>Счёт</MudTh>
                 <MudTh>Часовой пояс</MudTh>
+                <MudTh>Локаль</MudTh>
                 <MudTh Style="width: 120px;">Действия</MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -42,6 +43,7 @@
                 <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
                 <MudTd DataLabel="Счёт">@context.Account</MudTd>
                 <MudTd DataLabel="Часовой пояс">@TimeZoneService.GetDisplayName(context.TimeZoneId)</MudTd>
+                <MudTd DataLabel="Локаль">@((context.Locale ?? "ru").ToUpperInvariant())</MudTd>
                 <MudTd DataLabel="Действия">
                     <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" OnClick="@(() => OpenSentHistory(context))" title="История отправок" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
@@ -114,7 +116,7 @@
 
     private async Task OpenCreate()
     {
-        var dto = new AgentAdminDto { Id = "", Name = "", Account = "", TimeZoneId = "UTC", SettingsJson = "", PartnerEmail = null };
+        var dto = new AgentAdminDto { Id = "", Name = "", Account = "", TimeZoneId = "UTC", SettingsJson = "", PartnerEmail = null, Locale = "ru" };
         var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Новый агент", parameters, options);
@@ -125,7 +127,7 @@
 
     private async Task OpenEdit(AgentAdminDto item)
     {
-        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "", PartnerEmail = item.PartnerEmail };
+        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "", PartnerEmail = item.PartnerEmail, Locale = string.IsNullOrWhiteSpace(item.Locale) ? "ru" : item.Locale };
         var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Изменить агента", parameters, options);

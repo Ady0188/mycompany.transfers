@@ -8,6 +8,7 @@ public sealed class CachedProviderRepository : IProviderRepository
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(120);
     private readonly IProviderRepository _inner;
     private readonly ICacheService _cache;
+    private const string AllKey = "provider:all";
 
     public CachedProviderRepository(IProviderRepository inner, ICacheService cache) =>
         (_inner, _cache) = (inner, cache);
@@ -25,11 +26,36 @@ public sealed class CachedProviderRepository : IProviderRepository
         _cache.GetOrCreateAsync($"provider:exists-enabled:{id}", _ => _inner.ExistsEnabledAsync(id, ct), Ttl, ct);
 
     public async Task<IReadOnlyList<Provider>> GetAllAsync(CancellationToken ct) =>
-        await _inner.GetAllAsync(ct);
+        (await _cache.GetOrCreateAsync(AllKey, async _ => (IReadOnlyList<Provider>?)await _inner.GetAllAsync(ct), Ttl, ct))
+        ?? Array.Empty<Provider>();
 
-    public void Add(Provider provider) => _inner.Add(provider);
+    public void Add(Provider provider)
+    {
+        _inner.Add(provider);
+        var id = provider.Id;
+        _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"provider:by-id:{id}", default);
+        _ = _cache.RemoveAsync($"provider:exists:{id}", default);
+        _ = _cache.RemoveAsync($"provider:exists-enabled:{id}", default);
+    }
 
-    public void Update(Provider provider) => _inner.Update(provider);
+    public void Update(Provider provider)
+    {
+        _inner.Update(provider);
+        var id = provider.Id;
+        _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"provider:by-id:{id}", default);
+        _ = _cache.RemoveAsync($"provider:exists:{id}", default);
+        _ = _cache.RemoveAsync($"provider:exists-enabled:{id}", default);
+    }
 
-    public void Remove(Provider provider) => _inner.Remove(provider);
+    public void Remove(Provider provider)
+    {
+        var id = provider.Id;
+        _inner.Remove(provider);
+        _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"provider:by-id:{id}", default);
+        _ = _cache.RemoveAsync($"provider:exists:{id}", default);
+        _ = _cache.RemoveAsync($"provider:exists-enabled:{id}", default);
+    }
 }

@@ -40,8 +40,22 @@ public sealed class CachedAccessRepository : IAccessRepository
         _inner.ExistsAgentServiceAccessAsync(agentId, serviceId, ct);
 
     public void Add(AgentServiceAccess entity) => _inner.Add(entity);
-    public void Update(AgentServiceAccess entity) => _inner.Update(entity);
-    public void Remove(AgentServiceAccess entity) => _inner.Remove(entity);
+    public void Update(AgentServiceAccess entity)
+    {
+        _inner.Update(entity);
+        var agentId = entity.AgentId;
+        var serviceId = entity.ServiceId;
+        _ = _cache.RemoveAsync($"acc:svc:obj:{agentId}:{serviceId}", default);
+        _ = _cache.RemoveAsync($"acc:svc:{agentId}:{serviceId}", default);
+    }
+    public void Remove(AgentServiceAccess entity)
+    {
+        var agentId = entity.AgentId;
+        var serviceId = entity.ServiceId;
+        _inner.Remove(entity);
+        _ = _cache.RemoveAsync($"acc:svc:obj:{agentId}:{serviceId}", default);
+        _ = _cache.RemoveAsync($"acc:svc:{agentId}:{serviceId}", default);
+    }
 
     public Task<IReadOnlyList<AgentCurrencyAccess>> GetAllAgentCurrencyAccessAsync(CancellationToken ct) =>
         _inner.GetAllAgentCurrencyAccessAsync(ct);
@@ -52,7 +66,28 @@ public sealed class CachedAccessRepository : IAccessRepository
     public Task<bool> ExistsAgentCurrencyAccessAsync(string agentId, string currency, CancellationToken ct) =>
         _inner.ExistsAgentCurrencyAccessAsync(agentId, currency, ct);
 
-    public void Add(AgentCurrencyAccess entity) => _inner.Add(entity);
-    public void Update(AgentCurrencyAccess entity) => _inner.Update(entity);
-    public void Remove(AgentCurrencyAccess entity) => _inner.Remove(entity);
+    public void Add(AgentCurrencyAccess entity)
+    {
+        _inner.Add(entity);
+        var agentId = entity.AgentId;
+        var currency = entity.Currency.ToUpperInvariant();
+        _ = _cache.RemoveAsync($"acc:ccy:{agentId}:{currency}", default);
+        _ = _cache.RemoveAsync($"acc:ccy:list:{agentId}", default);
+    }
+    public void Update(AgentCurrencyAccess entity)
+    {
+        _inner.Update(entity);
+        var agentId = entity.AgentId;
+        var currency = entity.Currency.ToUpperInvariant();
+        _ = _cache.RemoveAsync($"acc:ccy:{agentId}:{currency}", default);
+        _ = _cache.RemoveAsync($"acc:ccy:list:{agentId}", default);
+    }
+    public void Remove(AgentCurrencyAccess entity)
+    {
+        var agentId = entity.AgentId;
+        var currency = entity.Currency.ToUpperInvariant();
+        _inner.Remove(entity);
+        _ = _cache.RemoveAsync($"acc:ccy:{agentId}:{currency}", default);
+        _ = _cache.RemoveAsync($"acc:ccy:list:{agentId}", default);
+    }
 }

@@ -2,6 +2,7 @@
 @using MyCompany.Transfers.Admin.Client.Models
 @using MyCompany.Transfers.Admin.Client.Services
 @inject ITerminalsApiService Api
+@inject IAgentsApiService AgentsApi
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -141,11 +142,18 @@
     private async Task OpenSendCredentials(TerminalListDto item)
     {
         var terminal = await Api.GetByIdAsync(item.Id);
+        AgentAdminDto? agent = null;
+        if (terminal is not null && !string.IsNullOrWhiteSpace(terminal.AgentId))
+        {
+            agent = await AgentsApi.GetByIdAsync(terminal.AgentId);
+        }
+        var agentLocale = string.IsNullOrWhiteSpace(agent?.Locale) ? "ru" : agent!.Locale;
         var parameters = new DialogParameters
         {
             ["TerminalId"] = item.Id,
             ["TerminalName"] = item.Name,
-            ["PartnerEmail"] = terminal?.AgentPartnerEmail
+            ["PartnerEmail"] = terminal?.AgentPartnerEmail,
+            ["AgentLocale"] = agentLocale
         };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<SendCredentialsDialog>("Отправить данные на почту", parameters, options);

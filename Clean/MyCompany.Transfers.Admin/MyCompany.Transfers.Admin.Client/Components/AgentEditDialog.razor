@@ -53,6 +53,18 @@
                     <MudTextField @bind-Value="_model.PartnerEmail" Variant="Variant.Outlined" Label="Для подстановки «Кому» при отправке данных терминалов" Immediate="true" />
                 </MudItem>
 
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Локаль</MudText>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSelect T="string" @bind-Value="_model.Locale" Variant="Variant.Outlined" Label="Локаль агента">
+                        @foreach (var loc in _locales)
+                        {
+                            <MudSelectItem T="string" Value="@loc.Value">@loc.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
                 <MudItem xs="12">
                     <MudText Typo="Typo.body2" Class="mb-2">Настройки (ключ — значение)</MudText>
                     <MudStack Spacing="2">
@@ -93,6 +105,11 @@
     [Parameter] public bool IsCreate { get; set; }
 
     private IReadOnlyList<(string Id, string DisplayName)> _timeZones = Array.Empty<(string, string)>();
+    private static readonly (string Value, string Label)[] _locales = new[]
+    {
+        ("ru", "Русский"),
+        ("en", "English")
+    };
 
     private AgentAdminDto _model = null!;
     private List<SettingItem> _settingsList = new();
@@ -103,7 +120,16 @@
     protected override void OnInitialized()
     {
         _timeZones = TimeZoneService.GetTimeZonesForDisplay();
-        _model = new AgentAdminDto { Id = Model.Id, Name = Model.Name ?? "", Account = Model.Account, TimeZoneId = Model.TimeZoneId ?? "UTC", SettingsJson = Model.SettingsJson ?? "", PartnerEmail = Model.PartnerEmail };
+        _model = new AgentAdminDto
+        {
+            Id = Model.Id,
+            Name = Model.Name ?? "",
+            Account = Model.Account,
+            TimeZoneId = Model.TimeZoneId ?? "UTC",
+            SettingsJson = Model.SettingsJson ?? "",
+            PartnerEmail = Model.PartnerEmail,
+            Locale = string.IsNullOrWhiteSpace(Model.Locale) ? "ru" : Model.Locale
+        };
         _isCreate = IsCreate;
         LoadSettingsFromJson(_model.SettingsJson);
     }

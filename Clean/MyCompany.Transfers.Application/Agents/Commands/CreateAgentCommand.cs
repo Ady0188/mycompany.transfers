@@ -13,7 +13,8 @@ public sealed record CreateAgentCommand(
     string? Name,
     string TimeZoneId,
     string SettingsJson,
-    string? PartnerEmail = null) : IRequest<ErrorOr<AgentAdminDto>>;
+    string? PartnerEmail = null,
+    string Locale = "ru") : IRequest<ErrorOr<AgentAdminDto>>;
 
 public sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentCommand, ErrorOr<AgentAdminDto>>
 {
@@ -31,7 +32,7 @@ public sealed class CreateAgentCommandHandler : IRequestHandler<CreateAgentComma
         if (await _agents.ExistsAsync(m.Id, ct))
             return AppErrors.Common.Validation($"Агент '{m.Id}' уже существует.");
 
-        Agent agent = Agent.Create(m.Id, m.Account, m.Name, m.TimeZoneId, m.SettingsJson, m.PartnerEmail);
+        Agent agent = Agent.Create(m.Id, m.Account, m.Name, m.TimeZoneId, m.SettingsJson, m.PartnerEmail, m.Locale);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
