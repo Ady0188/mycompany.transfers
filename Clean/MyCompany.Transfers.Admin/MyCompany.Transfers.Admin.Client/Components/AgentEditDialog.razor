@@ -46,6 +46,13 @@
                     </MudSelect>
                 </MudItem>
 
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Почта партнёра</MudText>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.PartnerEmail" Variant="Variant.Outlined" Label="Для подстановки «Кому» при отправке данных терминалов" Immediate="true" />
+                </MudItem>
+
                 <MudItem xs="12">
                     <MudText Typo="Typo.body2" Class="mb-2">Настройки (ключ — значение)</MudText>
                     <MudStack Spacing="2">
@@ -96,7 +103,7 @@
     protected override void OnInitialized()
     {
         _timeZones = TimeZoneService.GetTimeZonesForDisplay();
-        _model = new AgentAdminDto { Id = Model.Id, Name = Model.Name ?? "", Account = Model.Account, TimeZoneId = Model.TimeZoneId ?? "UTC", SettingsJson = Model.SettingsJson ?? "" };
+        _model = new AgentAdminDto { Id = Model.Id, Name = Model.Name ?? "", Account = Model.Account, TimeZoneId = Model.TimeZoneId ?? "UTC", SettingsJson = Model.SettingsJson ?? "", PartnerEmail = Model.PartnerEmail };
         _isCreate = IsCreate;
         LoadSettingsFromJson(_model.SettingsJson);
     }

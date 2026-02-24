@@ -12,22 +12,25 @@ public sealed class Agent : IAggregateRoot
     public string TimeZoneId { get; private set; } = "Asia/Dushanbe";
     public Dictionary<string, long> Balances { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
     public string SettingsJson { get; private set; } = "{}";
+    /// <summary>Почта партнёра для отправки данных терминалов (подстановка «Кому»).</summary>
+    public string? PartnerEmail { get; private set; }
 
     private Agent() { }
 
-    private Agent(string id, string name, string account, string timeZoneId, string settingsJson)
+    private Agent(string id, string name, string account, string timeZoneId, string settingsJson, string? partnerEmail)
     {
         Id = id;
         Name = name ?? "";
         Account = account;
         TimeZoneId = timeZoneId;
         SettingsJson = settingsJson;
+        PartnerEmail = partnerEmail;
     }
 
     /// <summary>
     /// Фабрика создания агента (DDD). Гарантирует инварианты и значения по умолчанию.
     /// </summary>
-    public static Agent Create(string id, string account, string? name = null, string? timeZoneId = null, string? settingsJson = null)
+    public static Agent Create(string id, string account, string? name = null, string? timeZoneId = null, string? settingsJson = null, string? partnerEmail = null)
     {
         if (string.IsNullOrWhiteSpace(id))
             throw new DomainException("Id агента обязателен.");
@@ -38,13 +41,14 @@ public sealed class Agent : IAggregateRoot
             string.IsNullOrWhiteSpace(name) ? "" : name.Trim(),
             account.Trim(),
             string.IsNullOrWhiteSpace(timeZoneId) ? "Asia/Dushanbe" : timeZoneId,
-            string.IsNullOrWhiteSpace(settingsJson) ? "{}" : settingsJson);
+            string.IsNullOrWhiteSpace(settingsJson) ? "{}" : settingsJson,
+            partnerEmail);
     }
 
     /// <summary>
     /// Обновление профиля агента (название, счёт, часовой пояс и/или настройки). Пустые значения не меняют текущие.
     /// </summary>
-    public void UpdateProfile(string? name = null, string? account = null, string? timeZoneId = null, string? settingsJson = null)
+    public void UpdateProfile(string? name = null, string? account = null, string? timeZoneId = null, string? settingsJson = null, string? partnerEmail = null)
     {
         if (name != null)
             Name = name.Trim();
@@ -54,6 +58,8 @@ public sealed class Agent : IAggregateRoot
             TimeZoneId = timeZoneId;
         if (!string.IsNullOrWhiteSpace(settingsJson))
             SettingsJson = settingsJson;
+        if (partnerEmail is not null)
+            PartnerEmail = partnerEmail;
     }
 
     public bool HasSufficientBalance(string currency, long amountMinor) =>

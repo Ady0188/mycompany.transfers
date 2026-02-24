@@ -4,6 +4,7 @@ using MyCompany.Transfers.Application.Terminals.Commands;
 using MyCompany.Transfers.Application.Terminals.Dtos;
 using MyCompany.Transfers.Application.Terminals.Queries;
 using MyCompany.Transfers.Api.Auth;
+using MyCompany.Transfers.Api.Models;
 
 namespace MyCompany.Transfers.Api.Controllers;
 
@@ -39,7 +40,7 @@ public sealed class TerminalsController : BaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TerminalAdminDto dto, CancellationToken ct = default)
     {
-        var cmd = new CreateTerminalCommand(dto.Id, dto.AgentId, dto.Name, dto.ApiKey, dto.Secret, dto.Active);
+        var cmd = new CreateTerminalCommand(dto.AgentId, dto.Name, dto.ApiKey, dto.Active);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created), Problem);
     }
@@ -47,7 +48,7 @@ public sealed class TerminalsController : BaseController
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] TerminalAdminDto dto, CancellationToken ct = default)
     {
-        var cmd = new UpdateTerminalCommand(id, dto.AgentId, dto.Name, dto.ApiKey, dto.Secret, dto.Active);
+        var cmd = new UpdateTerminalCommand(id, dto.AgentId, dto.Name, dto.ApiKey, null, dto.Active);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(updated => Ok(updated), Problem);
     }
@@ -57,5 +58,16 @@ public sealed class TerminalsController : BaseController
     {
         var result = await _mediator.Send(new DeleteTerminalCommand(id), ct);
         return result.Match(_ => NoContent(), Problem);
+    }
+
+    /// <summary>Отправить на почту зашифрованный архив с данными терминала (AES). Пароль возвращается один раз — передайте партнёру другим каналом (Telegram, WhatsApp и т.д.).</summary>
+    [HttpPost("{id}/send-credentials")]
+    public async Task<IActionResult> SendCredentials(string id, [FromBody] SendTerminalCredentialsRequest request, CancellationToken ct = default)
+    {
+        var cmd = new SendTerminalCredentialsCommand(id, request.ToEmail, request.Body, request.Subject);
+        var result = await _mediator.Send(cmd, ct);
+        return result.Match(
+            r => Ok(new SendCredentialsResponse { ArchivePassword = r.ArchivePassword }),
+            Problem);
     }
 }

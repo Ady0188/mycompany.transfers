@@ -35,19 +35,29 @@ public sealed class CachedServiceRepository : IServiceRepository
     public void Add(Service service)
     {
         _inner.Add(service);
+        var id = service.Id;
         _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"service:exists:{id}", default);
     }
 
     public void Update(Service service)
     {
         _inner.Update(service);
+        var id = service.Id;
         _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"service:byid:{id}", default);
+        _ = _cache.RemoveAsync($"service:byid-withtype:{id}", default);
+        _ = _cache.RemoveAsync($"service:exists:{id}", default);
     }
 
     public void Remove(Service service)
     {
+        var id = service.Id;
         _inner.Remove(service);
         _ = _cache.RemoveAsync(AllKey, default);
+        _ = _cache.RemoveAsync($"service:byid:{id}", default);
+        _ = _cache.RemoveAsync($"service:byid-withtype:{id}", default);
+        _ = _cache.RemoveAsync($"service:exists:{id}", default);
     }
 
     public async Task<(Service? Service, bool IsByPan)> GetByIdWithTypeAsync(string serviceId, CancellationToken ct)

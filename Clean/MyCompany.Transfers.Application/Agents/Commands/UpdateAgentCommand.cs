@@ -10,8 +10,9 @@ public sealed record UpdateAgentCommand(
     string Id,
     string? Account,
     string? Name,
-    string TimeZoneId,
-    string SettingsJson) : IRequest<ErrorOr<AgentAdminDto>>;
+    string? TimeZoneId,
+    string? SettingsJson,
+    string? PartnerEmail = null) : IRequest<ErrorOr<AgentAdminDto>>;
 
 public sealed class UpdateAgentCommandHandler : IRequestHandler<UpdateAgentCommand, ErrorOr<AgentAdminDto>>
 {
@@ -32,7 +33,7 @@ public sealed class UpdateAgentCommandHandler : IRequestHandler<UpdateAgentComma
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            agent.UpdateProfile(m.Name, m.Account, m.TimeZoneId, m.SettingsJson);
+            agent.UpdateProfile(m.Name, m.Account, m.TimeZoneId, m.SettingsJson, m.PartnerEmail);
             _agents.Update(agent);
             return Task.FromResult(true);
         }, ct);

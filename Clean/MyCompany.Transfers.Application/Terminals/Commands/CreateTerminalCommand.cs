@@ -8,11 +8,9 @@ using MyCompany.Transfers.Domain.Agents;
 namespace MyCompany.Transfers.Application.Terminals.Commands;
 
 public sealed record CreateTerminalCommand(
-    string Id,
     string AgentId,
     string Name,
     string ApiKey,
-    string Secret,
     bool Active = true) : IRequest<ErrorOr<TerminalAdminDto>>;
 
 public sealed class CreateTerminalCommandHandler : IRequestHandler<CreateTerminalCommand, ErrorOr<TerminalAdminDto>>
@@ -30,12 +28,12 @@ public sealed class CreateTerminalCommandHandler : IRequestHandler<CreateTermina
 
     public async Task<ErrorOr<TerminalAdminDto>> Handle(CreateTerminalCommand cmd, CancellationToken ct)
     {
-        if (await _terminals.ExistsAsync(cmd.Id, ct))
-            return AppErrors.Common.Validation($"Терминал '{cmd.Id}' уже существует.");
         if (!await _agents.ExistsAsync(cmd.AgentId, ct))
             return AppErrors.Common.Validation($"Агент '{cmd.AgentId}' не найден. Создание терминала невозможно.");
 
-        var terminal = Terminal.Create(cmd.Id, cmd.AgentId, cmd.Name, cmd.ApiKey, cmd.Secret ?? "", cmd.Active);
+        var id = Guid.NewGuid().ToString("N");
+        var secret = SecretGenerator.GenerateTerminalSecret();
+        var terminal = Terminal.Create(id, cmd.AgentId, cmd.Name, cmd.ApiKey, secret, cmd.Active);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
@@ -43,6 +41,6 @@ public sealed class CreateTerminalCommandHandler : IRequestHandler<CreateTermina
             return Task.FromResult(true);
         }, ct);
 
-        return TerminalAdminDto.FromDomain(terminal);
+        return TerminalAdminDto.FromDomain(terminal, maskSecret: true);
     }
 }

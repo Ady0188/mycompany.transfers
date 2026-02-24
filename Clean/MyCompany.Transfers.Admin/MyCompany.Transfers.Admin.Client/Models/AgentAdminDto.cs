@@ -19,4 +19,7 @@ public sealed class AgentAdminDto
 
     [JsonPropertyName("settingsJson")]
     public string SettingsJson { get; set; } = "";
+
+    [JsonPropertyName("partnerEmail")]
+    public string? PartnerEmail { get; set; }
 }

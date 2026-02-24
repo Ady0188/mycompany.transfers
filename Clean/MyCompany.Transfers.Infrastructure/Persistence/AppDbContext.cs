@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Domain.Accounts;
+using MyCompany.Transfers.Infrastructure.Encryption;
 using MyCompany.Transfers.Domain.Agents;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Rates;
@@ -18,6 +19,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
 {
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<Terminal> Terminals => Set<Terminal>();
+    public DbSet<SentCredentialsEmail> SentCredentialsEmails => Set<SentCredentialsEmail>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<ServiceParamDefinition> ServiceParamDefinitions => Set<ServiceParamDefinition>();
     public DbSet<AccountDefinition> AccountDefinitions => Set<AccountDefinition>();
@@ -70,14 +72,37 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.Balances).HasConversion(dictConv).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb").Metadata.SetValueComparer(dictComparer);
             eb.Property(x => x.TimeZoneId).IsRequired().HasMaxLength(64).HasDefaultValue("Asia/Dushanbe");
             eb.Property(x => x.SettingsJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+            eb.Property(x => x.PartnerEmail).HasMaxLength(256);
         });
 
         b.Entity<Terminal>(eb =>
         {
             eb.HasKey(x => x.Id);
             eb.Property(x => x.AgentId).IsRequired().HasMaxLength(64);
-            eb.Property(x => x.ApiKey).IsRequired().HasMaxLength(128);
+            var enc = CredentialsEncryptionHolder.Encryption;
+            if (enc != null)
+            {
+                eb.Property(x => x.ApiKey).IsRequired()
+                    .HasConversion(v => enc.EncryptApiKey(v), v => enc.DecryptApiKey(v))
+                    .HasMaxLength(512);
+                eb.Property(x => x.Secret).HasConversion(v => enc.EncryptSecret(v), v => enc.DecryptSecret(v)).HasMaxLength(1024);
+            }
+            else
+            {
+                eb.Property(x => x.ApiKey).IsRequired().HasMaxLength(128);
+            }
             eb.HasIndex(x => x.ApiKey).IsUnique();
+        });
+
+        b.Entity<SentCredentialsEmail>(eb =>
+        {
+            eb.HasKey(x => x.Id);
+            eb.Property(x => x.AgentId).IsRequired().HasMaxLength(64);
+            eb.Property(x => x.TerminalId).IsRequired().HasMaxLength(64);
+            eb.Property(x => x.ToEmail).IsRequired().HasMaxLength(256);
+            eb.Property(x => x.Subject).IsRequired().HasMaxLength(512);
+            eb.Property(x => x.SentAtUtc).IsRequired();
+            eb.ToTable("SentCredentialsEmails");
         });
 
         b.Entity<ParamDefinition>(eb =>

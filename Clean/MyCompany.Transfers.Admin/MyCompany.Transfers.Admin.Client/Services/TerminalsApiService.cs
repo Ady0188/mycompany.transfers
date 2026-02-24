@@ -7,11 +7,12 @@ namespace MyCompany.Transfers.Admin.Client.Services;
 
 public interface ITerminalsApiService
 {
-    Task<PagedResult<TerminalAdminDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default);
+    Task<PagedResult<TerminalListDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default);
     Task<TerminalAdminDto?> GetByIdAsync(string id, CancellationToken ct = default);
     Task<(bool success, string? error)> CreateAsync(TerminalAdminDto dto, CancellationToken ct = default);
     Task<(bool success, string? error)> UpdateAsync(string id, TerminalAdminDto dto, CancellationToken ct = default);
     Task<(bool success, string? error)> DeleteAsync(string id, CancellationToken ct = default);
+    Task<(bool success, string? error, string? archivePassword)> SendCredentialsAsync(string terminalId, string toEmail, string body, string? subject, CancellationToken ct = default);
 }
 
 public sealed class TerminalsApiService : ITerminalsApiService
@@ -23,7 +24,7 @@ public sealed class TerminalsApiService : ITerminalsApiService
 
     private HttpClient Api() => _httpFactory.CreateClient("Api");
 
-    public async Task<PagedResult<TerminalAdminDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default)
+    public async Task<PagedResult<TerminalListDto>> GetPagedAsync(int page = 1, int pageSize = 10, string? search = null, CancellationToken ct = default)
     {
         var query = new List<string> { $"page={page}", $"pageSize={pageSize}" };
         if (!string.IsNullOrWhiteSpace(search))
@@ -35,8 +36,8 @@ public sealed class TerminalsApiService : ITerminalsApiService
             var msg = await ApiErrorHelper.ReadErrorAsync(response);
             throw new HttpRequestException($"Запрос списка терминалов не выполнен ({(int)response.StatusCode}): {msg ?? response.ReasonPhrase}");
         }
-        var result = await response.Content.ReadFromJsonAsync<PagedResult<TerminalAdminDto>>(JsonOptions, ct);
-        return result ?? new PagedResult<TerminalAdminDto>();
+        var result = await response.Content.ReadFromJsonAsync<PagedResult<TerminalListDto>>(JsonOptions, ct);
+        return result ?? new PagedResult<TerminalListDto>();
     }
 
     public async Task<TerminalAdminDto?> GetByIdAsync(string id, CancellationToken ct = default)
@@ -65,5 +66,15 @@ public sealed class TerminalsApiService : ITerminalsApiService
         var response = await Api().DeleteAsync($"api/admin/terminals/{Uri.EscapeDataString(id)}", ct);
         if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent) return (true, null);
         return (false, await ApiErrorHelper.ReadErrorAsync(response));
+    }
+
+    public async Task<(bool success, string? error, string? archivePassword)> SendCredentialsAsync(string terminalId, string toEmail, string body, string? subject, CancellationToken ct = default)
+    {
+        var payload = new { toEmail, body, subject };
+        var response = await Api().PostAsJsonAsync($"api/admin/terminals/{Uri.EscapeDataString(terminalId)}/send-credentials", payload, ct);
+        if (!response.IsSuccessStatusCode)
+            return (false, await ApiErrorHelper.ReadErrorAsync(response), null);
+        var content = await response.Content.ReadFromJsonAsync<SendCredentialsResponse>(JsonOptions, ct);
+        return (true, null, content?.ArchivePassword);
     }
 }

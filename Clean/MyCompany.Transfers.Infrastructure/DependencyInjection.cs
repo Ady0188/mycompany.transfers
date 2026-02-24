@@ -5,7 +5,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Infrastructure.Caching;
+using MyCompany.Transfers.Infrastructure.Email;
+using MyCompany.Transfers.Infrastructure.Encryption;
 using MyCompany.Transfers.Infrastructure.Persistence;
+using Microsoft.Extensions.Options;
 using MyCompany.Transfers.Infrastructure.Providers;
 using MyCompany.Transfers.Infrastructure.Repositories;
 using MyCompany.Transfers.Infrastructure.Workers;
@@ -61,6 +64,8 @@ public static class DependencyInjection
         services.AddScoped<ITerminalRepository>(sp =>
             new CachedTerminalRepository(sp.GetRequiredService<TerminalRepository>(), sp.GetRequiredService<ICacheService>()));
 
+        services.AddScoped<ISentCredentialsEmailRepository, SentCredentialsEmailRepository>();
+
         services.AddScoped<ParameterRepository>();
         services.AddScoped<IParameterRepository>(sp =>
             new CachedParameterRepository(sp.GetRequiredService<ParameterRepository>(), sp.GetRequiredService<ICacheService>()));
@@ -90,6 +95,18 @@ public static class DependencyInjection
         });
 
         services.AddHostedService<ProviderSenderWorker>();
+
+        var encKey = configuration[$"{CredentialsEncryptionOptions.SectionName}:KeyBase64"];
+        if (!string.IsNullOrWhiteSpace(encKey))
+        {
+            services.Configure<CredentialsEncryptionOptions>(configuration.GetSection(CredentialsEncryptionOptions.SectionName));
+            services.AddSingleton<ICredentialsEncryption, AesCredentialsEncryption>();
+            services.AddHostedService<CredentialsEncryptionInitializer>();
+        }
+
+        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.AddScoped<ITerminalCredentialsEmailSender, SmtpTerminalCredentialsEmailSender>();
+        services.AddScoped<ITerminalCredentialsArchiveBuilder, EncryptedTerminalCredentialsArchiveBuilder>();
 
         return services;
     }

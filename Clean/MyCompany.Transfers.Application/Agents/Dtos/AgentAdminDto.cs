@@ -7,9 +7,10 @@ public sealed record AgentAdminDto(
     string Name,
     string Account,
     string TimeZoneId,
-    string SettingsJson)
+    string SettingsJson,
+    string? PartnerEmail)
 {
     public static AgentAdminDto FromDomain(Agent a) =>
-        new(a.Id, a.Name, a.Account, a.TimeZoneId, a.SettingsJson);
+        new(a.Id, a.Name, a.Account, a.TimeZoneId, a.SettingsJson, a.PartnerEmail);
 }
 

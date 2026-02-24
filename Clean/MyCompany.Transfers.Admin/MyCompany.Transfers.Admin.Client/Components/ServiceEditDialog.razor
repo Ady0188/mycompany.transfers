@@ -4,12 +4,20 @@
 @inject IServicesApiService Api
 @inject IProvidersApiService ProvidersApi
 @inject IAccountDefinitionsApiService AccountDefinitionsApi
+@inject IParametersApiService ParametersApi
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
-        <EditForm Model="_model" OnValidSubmit="Submit">
-            <MudGrid Spacing="3">
+        <div class="service-edit-dialog-content" style="max-width: 100%; overflow-x: hidden;">
+            <style>
+                .service-edit-dialog-content { max-width: 100%; overflow-x: hidden; }
+                .service-edit-dialog-content .service-param-select .mud-input-slot,
+                .service-edit-dialog-content .service-param-select .mud-input-control { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+                .service-edit-dialog-content .service-param-select .mud-input-slot > div { overflow: hidden; text-overflow: ellipsis; }
+            </style>
+            <EditForm Model="_model" OnValidSubmit="Submit">
+                <MudGrid Spacing="3" Style="max-width: 100%; overflow-x: hidden;">
                 @if (!_isCreate)
                 {
                     <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id</MudText></MudItem>
@@ -52,6 +60,45 @@
                     <MudTextField @bind-Value="_model.ProviderServiceId" Variant="Variant.Outlined" Immediate="true" Placeholder="Код услуги у провайдера" />
                 </MudItem>
 
+                <MudItem xs="12" Style="overflow: hidden; max-width: 100%;">
+                    <MudText Typo="Typo.subtitle2" GutterBottom="true">Требуемые поля (параметры услуги)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Параметры из справочника ParamDefinition и их обязательность для этой услуги (таблица ServiceParamDefinition).</MudText>
+                </MudItem>
+                <MudItem xs="12" Style="overflow: hidden; max-width: 100%;">
+                    <div style="overflow-x: auto; max-width: 100%;">
+                        <MudTable T="ServiceParamDefinitionDto" Items="_model.Parameters" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Style="max-height: 220px; min-width: 0;">
+                            <HeaderContent>
+                                <MudTh>Параметр (код / название)</MudTh>
+                                <MudTh Style="width: 140px;">Обязательный</MudTh>
+                                <MudTh Style="width: 56px;"></MudTh>
+                            </HeaderContent>
+                            <RowTemplate Context="paramRow">
+                                <MudTd DataLabel="Параметр" Style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@ParameterDisplay(paramRow.ParameterId)">@ParameterDisplay(paramRow.ParameterId)</MudTd>
+                                <MudTd DataLabel="Обязательный">
+                                    <MudSwitch @bind-Value="paramRow.Required" Color="Color.Primary" />
+                                </MudTd>
+                                <MudTd DataLabel="">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => RemoveParameter(paramRow))" title="Удалить" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </div>
+                    <MudStack Row="true" Class="mt-2" Spacing="2" AlignItems="AlignItems.Center" Style="max-width: 100%; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 0; max-width: 100%;">
+                            <MudSelect T="string" @bind-Value="_newParamId" Variant="Variant.Outlined" Label="Добавить параметр"
+                                       Clearable="true" Dense="true" FullWidth="true" Class="service-param-select">
+                                @foreach (var p in _availableParameters)
+                                {
+                                    <MudSelectItem T="string" Value="@p.Id">@(p.Code) — @(p.Name ?? p.Id)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </div>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="AddParameter" Disabled="string.IsNullOrEmpty(_newParamId)" Style="flex-shrink: 0;">
+                            Добавить
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+
                 @if (!string.IsNullOrEmpty(_error))
                 {
                     <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
@@ -65,7 +112,8 @@
                     </MudStack>
                 </MudItem>
             </MudGrid>
-        </EditForm>
+            </EditForm>
+        </div>
     </DialogContent>
 </MudDialog>
 
@@ -80,6 +128,11 @@
     private string? _error;
     private List<ProviderAdminDto> _providers = new();
     private List<AccountDefinitionAdminDto> _accountDefinitions = new();
+    private List<ParameterAdminDto> _allParameters = new();
+    private string? _newParamId;
+
+    private IEnumerable<ParameterAdminDto> _availableParameters =>
+        _allParameters.Where(p => !_model.Parameters?.Any(x => x.ParameterId == p.Id) ?? true);
 
     protected override async Task OnInitializedAsync()
     {
@@ -102,6 +155,8 @@
         else
         {
             _model = Model ?? new ServiceAdminDto();
+            if (_model.Parameters == null)
+                _model.Parameters = new List<ServiceParamDefinitionDto>();
         }
         try
         {
@@ -120,6 +175,38 @@
         {
             _error = string.IsNullOrEmpty(_error) ? $"Не удалось загрузить определения счёта: {ex.Message}" : _error + " " + ex.Message;
         }
+        try
+        {
+            var paramsResult = await ParametersApi.GetPagedAsync(1, 500);
+            _allParameters = paramsResult.Items ?? new List<ParameterAdminDto>();
+        }
+        catch
+        {
+            _allParameters = new List<ParameterAdminDto>();
+        }
+    }
+
+    private string ParameterDisplay(string parameterId)
+    {
+        if (string.IsNullOrEmpty(parameterId)) return "—";
+        var p = _allParameters.FirstOrDefault(x => x.Id == parameterId);
+        return p != null ? $"{p.Code} — {p.Name ?? p.Id}" : parameterId;
+    }
+
+    private void AddParameter()
+    {
+        if (string.IsNullOrEmpty(_newParamId)) return;
+        if (_model.Parameters == null) _model.Parameters = new List<ServiceParamDefinitionDto>();
+        if (_model.Parameters.Any(x => x.ParameterId == _newParamId)) return;
+        _model.Parameters.Add(new ServiceParamDefinitionDto { ParameterId = _newParamId, Required = true });
+        _newParamId = null;
+        StateHasChanged();
+    }
+
+    private void RemoveParameter(ServiceParamDefinitionDto item)
+    {
+        _model.Parameters?.Remove(item);
+        StateHasChanged();
     }
 
     private string GetAccountDefinitionCode(Guid id)

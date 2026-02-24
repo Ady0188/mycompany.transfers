@@ -43,6 +43,6 @@ public sealed class UpdateTerminalCommandHandler : IRequestHandler<UpdateTermina
             return Task.FromResult(true);
         }, ct);
 
-        return TerminalAdminDto.FromDomain(terminal);
+        return TerminalAdminDto.FromDomain(terminal, maskSecret: true);
     }
 }

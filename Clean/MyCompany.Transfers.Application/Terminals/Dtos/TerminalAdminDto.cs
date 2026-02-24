@@ -8,8 +8,10 @@ public sealed record TerminalAdminDto(
     string Name,
     string ApiKey,
     string Secret,
-    bool Active)
+    bool Active,
+    string? AgentPartnerEmail)
 {
-    public static TerminalAdminDto FromDomain(Terminal t) =>
-        new(t.Id, t.AgentId, t.Name, t.ApiKey, t.Secret, t.Active);
+    /// <summary>Маппинг из домена. При <paramref name="maskSecret"/> true Secret не возвращается (для API/клиента).</summary>
+    public static TerminalAdminDto FromDomain(Terminal t, string? agentPartnerEmail = null, bool maskSecret = false) =>
+        new(t.Id, t.AgentId, t.Name, t.ApiKey, maskSecret ? "" : t.Secret, t.Active, agentPartnerEmail);
 }

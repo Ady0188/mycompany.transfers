@@ -9,10 +9,20 @@
     <DialogContent>
         <EditForm Model="_model" OnValidSubmit="Submit">
             <MudGrid Spacing="3">
-                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id <span class="text-error">*</span></MudText></MudItem>
-                <MudItem xs="12" md="7">
-                    <MudTextField @bind-Value="_model.Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id" ReadOnly="!_isCreate" Immediate="true" />
-                </MudItem>
+                @if (!_isCreate)
+                {
+                    <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id</MudText></MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudTextField @bind-Value="_model.Id" Variant="Variant.Outlined" ReadOnly="true" Immediate="true" />
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Id</MudText></MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Присваивается при создании</MudText>
+                    </MudItem>
+                }
 
                 <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Агент <span class="text-error">*</span></MudText></MudItem>
                 <MudItem xs="12" md="7">
@@ -36,7 +46,9 @@
 
                 <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Secret</MudText></MudItem>
                 <MudItem xs="12" md="7">
-                    <MudTextField @bind-Value="_model.Secret" Variant="Variant.Outlined" Immediate="true" InputType="InputType.Password" />
+                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">
+                        @(_isCreate ? "Генерируется автоматически при создании" : "Не отображается (сохранён при создании)")
+                    </MudText>
                 </MudItem>
 
                 <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Активен</MudText></MudItem>
@@ -77,11 +89,11 @@
         _isCreate = IsCreate;
         _model = new TerminalAdminDto
         {
-            Id = Model.Id,
+            Id = Model.Id ?? "",
             AgentId = Model.AgentId ?? "",
             Name = Model.Name ?? "",
             ApiKey = Model.ApiKey ?? "",
-            Secret = Model.Secret ?? "",
+            Secret = "", // не передаётся: при создании генерируется на бэкенде, при редактировании не меняется
             Active = Model.Active
         };
         try

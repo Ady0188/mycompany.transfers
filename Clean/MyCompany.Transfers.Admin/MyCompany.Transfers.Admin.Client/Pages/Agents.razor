@@ -43,6 +43,7 @@
                 <MudTd DataLabel="Счёт">@context.Account</MudTd>
                 <MudTd DataLabel="Часовой пояс">@TimeZoneService.GetDisplayName(context.TimeZoneId)</MudTd>
                 <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" OnClick="@(() => OpenSentHistory(context))" title="История отправок" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
                 </MudTd>
@@ -113,7 +114,7 @@
 
     private async Task OpenCreate()
     {
-        var dto = new AgentAdminDto { Id = "", Name = "", Account = "", TimeZoneId = "UTC", SettingsJson = "" };
+        var dto = new AgentAdminDto { Id = "", Name = "", Account = "", TimeZoneId = "UTC", SettingsJson = "", PartnerEmail = null };
         var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Новый агент", parameters, options);
@@ -124,13 +125,20 @@
 
     private async Task OpenEdit(AgentAdminDto item)
     {
-        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "" };
+        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "", PartnerEmail = item.PartnerEmail };
         var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Изменить агента", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
             await ReloadAfterEdit();
+    }
+
+    private async Task OpenSentHistory(AgentAdminDto item)
+    {
+        var parameters = new DialogParameters { ["AgentId"] = item.Id, ["AgentName"] = item.Name ?? item.Id };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<SentCredentialsHistoryDialog>("История отправок агенту", parameters, options);
     }
 
     private async Task ConfirmDelete(AgentAdminDto item)

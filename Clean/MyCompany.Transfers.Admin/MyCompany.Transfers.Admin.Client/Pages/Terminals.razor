@@ -17,7 +17,7 @@
 
     <MudCard Elevation="2">
         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
-            <MudTextField @bind-Value="_search" Label="Поиск (Id, агент, название, ApiKey)" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudTextField @bind-Value="_search" Label="Поиск (Id, агент, название)" Variant="Variant.Outlined" Margin="Margin.Dense"
                           Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
                           Immediate="false" OnKeyUp="OnSearchKeyUp" Style="max-width: 420px;" />
             <MudButton Variant="Variant.Outlined" OnClick="ApplyFilter">Применить</MudButton>
@@ -28,22 +28,21 @@
             <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
         }
 
-        <MudTable T="TerminalAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
+        <MudTable T="TerminalListDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
             <HeaderContent>
                 <MudTh>Id</MudTh>
                 <MudTh>Агент</MudTh>
                 <MudTh>Название</MudTh>
-                <MudTh>ApiKey</MudTh>
                 <MudTh>Активен</MudTh>
-                <MudTh Style="width: 120px;">Действия</MudTh>
+                <MudTh Style="width: 180px;">Действия</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Id">@context.Id</MudTd>
                 <MudTd DataLabel="Агент">@context.AgentId</MudTd>
                 <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
-                <MudTd DataLabel="ApiKey">@(context.ApiKey?.Length > 12 ? context.ApiKey[..12] + "…" : context.ApiKey)</MudTd>
                 <MudTd DataLabel="Активен">@(context.Active ? "Да" : "Нет")</MudTd>
                 <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" OnClick="@(() => OpenSendCredentials(context))" title="Отправить данные на почту" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
                 </MudTd>
@@ -61,7 +60,7 @@
     private string _search = "";
     private int _filterVersion;
 
-    private async Task<TableData<TerminalAdminDto>> LoadServerData(TableState state, CancellationToken ct)
+    private async Task<TableData<TerminalListDto>> LoadServerData(TableState state, CancellationToken ct)
     {
         _loading = true;
         StateHasChanged();
@@ -70,16 +69,16 @@
             var page = state.Page + 1;
             var pageSize = state.PageSize;
             var result = await Api.GetPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(_search) ? null : _search, ct);
-            return new TableData<TerminalAdminDto>
+            return new TableData<TerminalListDto>
             {
-                Items = result.Items ?? new List<TerminalAdminDto>(),
+                Items = result.Items ?? new List<TerminalListDto>(),
                 TotalItems = result.TotalCount
             };
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
-            return new TableData<TerminalAdminDto> { Items = Array.Empty<TerminalAdminDto>(), TotalItems = 0 };
+            return new TableData<TerminalListDto> { Items = Array.Empty<TerminalListDto>(), TotalItems = 0 };
         }
         finally
         {
@@ -123,7 +122,7 @@
             await ReloadAfterEdit();
     }
 
-    private async Task OpenEdit(TerminalAdminDto item)
+    private async Task OpenEdit(TerminalListDto item)
     {
         var loaded = await Api.GetByIdAsync(item.Id);
         if (loaded is null)
@@ -139,7 +138,23 @@
             await ReloadAfterEdit();
     }
 
-    private async Task ConfirmDelete(TerminalAdminDto item)
+    private async Task OpenSendCredentials(TerminalListDto item)
+    {
+        var terminal = await Api.GetByIdAsync(item.Id);
+        var parameters = new DialogParameters
+        {
+            ["TerminalId"] = item.Id,
+            ["TerminalName"] = item.Name,
+            ["PartnerEmail"] = terminal?.AgentPartnerEmail
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SendCredentialsDialog>("Отправить данные на почту", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await Task.CompletedTask;
+    }
+
+    private async Task ConfirmDelete(TerminalListDto item)
     {
         var parameters = new DialogParameters
         {

@@ -11,6 +11,7 @@ public interface IAgentsApiService
     Task<(bool success, string? error)> CreateAsync(AgentAdminDto dto, CancellationToken ct = default);
     Task<(bool success, string? error)> UpdateAsync(string id, AgentAdminDto dto, CancellationToken ct = default);
     Task<(bool success, string? error)> DeleteAsync(string id, CancellationToken ct = default);
+    Task<IReadOnlyList<SentCredentialsEmailItemDto>?> GetSentCredentialsHistoryAsync(string agentId, CancellationToken ct = default);
 }
 
 public sealed class AgentsApiService : IAgentsApiService
@@ -57,6 +58,14 @@ public sealed class AgentsApiService : IAgentsApiService
         var response = await Api().DeleteAsync($"api/admin/agents/{Uri.EscapeDataString(id)}", ct);
         if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent) return (true, null);
         return (false, await ReadErrorAsync(response));
+    }
+
+    public async Task<IReadOnlyList<SentCredentialsEmailItemDto>?> GetSentCredentialsHistoryAsync(string agentId, CancellationToken ct = default)
+    {
+        var response = await Api().GetAsync($"api/admin/agents/{Uri.EscapeDataString(agentId)}/sent-credentials-history", ct);
+        if (!response.IsSuccessStatusCode) return null;
+        var list = await response.Content.ReadFromJsonAsync<List<SentCredentialsEmailItemDto>>(ct);
+        return list ?? new List<SentCredentialsEmailItemDto>();
     }
 
     private static async Task<string?> ReadErrorAsync(HttpResponseMessage response)
