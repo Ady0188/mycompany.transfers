@@ -10,6 +10,8 @@ public interface IAuthService
     Task SetTokenAsync(string token, CancellationToken ct = default);
     Task ClearTokenAsync(CancellationToken ct = default);
     Task<bool> IsAuthenticatedAsync(CancellationToken ct = default);
+    /// <summary>ФИО или отображаемое имя пользователя из JWT (если есть).</summary>
+    Task<string?> GetUserDisplayNameAsync(CancellationToken ct = default);
     /// <summary>Возвращает true при успехе, иначе false (неверный логин/пароль или ошибка).</summary>
     Task<(bool success, string? error)> LoginAsync(string login, string password, CancellationToken ct = default);
     Task LogoutAsync(CancellationToken ct = default);

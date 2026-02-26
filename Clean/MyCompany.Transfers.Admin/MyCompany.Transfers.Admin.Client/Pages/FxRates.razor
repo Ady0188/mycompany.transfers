@@ -1,6 +1,90 @@
 @page "/fx-rates"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IFxRatesApiService Api
+@inject ISnackbar Snackbar
 
 <PageTitle>Курсы валют — Админ-панель</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Курсы валют</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">Просмотр курсов валют (только чтение). api/admin/fx-rates</MudText>
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.h4" GutterBottom="false">Курсы валют</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">История курсов валют (только чтение). Изменение курсов выполняется через АБС.</MudText>
+        </MudStack>
+    </MudStack>
+
+    <MudCard Elevation="2">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+            <MudTextField @bind-Value="_agentFilter" Label="Фильтр по агенту" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="true" Style="max-width: 280px;" Placeholder="ID агента"
+ />
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadData">
+                Обновить
+            </MudButton>
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="FxRateAdminDto" Items="@_filteredItems" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true" SortLabel="Сортировка">
+            <HeaderContent>
+                <MudTh>Агент</MudTh>
+                <MudTh>Базовая валюта</MudTh>
+                <MudTh>Котировка</MudTh>
+                <MudTh>Курс</MudTh>
+                <MudTh>Обновлён (UTC)</MudTh>
+                <MudTh>Источник</MudTh>
+                <MudTh>Активен</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Агент">@context.AgentId</MudTd>
+                <MudTd DataLabel="Базовая валюта">@context.BaseCurrency</MudTd>
+                <MudTd DataLabel="Котировка">@context.QuoteCurrency</MudTd>
+                <MudTd DataLabel="Курс">@context.Rate.ToString("N4")</MudTd>
+                <MudTd DataLabel="Обновлён (UTC)">@context.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+                <MudTd DataLabel="Источник">@context.Source</MudTd>
+                <MudTd DataLabel="Активен">@(context.IsActive ? "Да" : "Нет")</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">Курсы не найдены. Задайте фильтр по агенту или оставьте пустым для полного списка.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudCard>
+</MudStack>
+
+@code {
+    private bool _loading = true;
+    private string _agentFilter = "";
+    private List<FxRateAdminDto> _items = new();
+    private IEnumerable<FxRateAdminDto> _filteredItems => _items;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var agentId = string.IsNullOrWhiteSpace(_agentFilter) ? null : _agentFilter.Trim();
+            _items = await Api.GetAllAsync(agentId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            _items = new List<FxRateAdminDto>();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+}

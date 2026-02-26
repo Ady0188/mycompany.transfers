@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.JSInterop;
 
@@ -6,6 +7,7 @@ namespace MyCompany.Transfers.Admin.Client.Services;
 
 public sealed class AuthService : IAuthService
 {
+    private const string NameClaimType = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
     private const string StorageKey = "admin_jwt";
     private readonly IHttpClientFactory _httpFactory;
     private readonly IJSRuntime _js;
@@ -42,6 +44,38 @@ public sealed class AuthService : IAuthService
     {
         var token = await GetTokenAsync(ct);
         return !string.IsNullOrWhiteSpace(token);
+    }
+
+    public async Task<string?> GetUserDisplayNameAsync(CancellationToken ct = default)
+    {
+        var token = await GetTokenAsync(ct);
+        if (string.IsNullOrWhiteSpace(token)) return null;
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length != 3) return null;
+            var payload = parts[1];
+            var base64 = payload.Replace('-', '+').Replace('_', '/');
+            switch (base64.Length % 4)
+            {
+                case 2: base64 += "=="; break;
+                case 3: base64 += "="; break;
+            }
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty(NameClaimType, out var nameProp))
+                return nameProp.GetString();
+            if (root.TryGetProperty("name", out nameProp))
+                return nameProp.GetString();
+            if (root.TryGetProperty("unique_name", out nameProp))
+                return nameProp.GetString();
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<(bool success, string? error)> LoginAsync(string login, string password, CancellationToken ct = default)

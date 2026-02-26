@@ -24,5 +24,6 @@ builder.Services.AddScoped<ITerminalsApiService, TerminalsApiService>();
 builder.Services.AddScoped<IParametersApiService, ParametersApiService>();
 builder.Services.AddScoped<IAgentServiceAccessApiService, AgentServiceAccessApiService>();
 builder.Services.AddScoped<IAgentCurrencyAccessApiService, AgentCurrencyAccessApiService>();
+builder.Services.AddScoped<IFxRatesApiService, FxRatesApiService>();
 
 await builder.Build().RunAsync();
