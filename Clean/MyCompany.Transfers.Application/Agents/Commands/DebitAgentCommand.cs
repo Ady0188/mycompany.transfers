@@ -10,17 +10,22 @@ namespace MyCompany.Transfers.Application.Agents.Commands;
 /// <summary>
 /// Дебитование баланса агента (списание). Вызывается со стороны АБС.
 /// </summary>
-public sealed record DebitAgentCommand(string AgentId, string Currency, long AmountMinor) : IRequest<ErrorOr<AgentBalanceResult>>;
+public sealed record DebitAgentCommand(string AgentId, string Currency, long AmountMinor, long DocId) : IRequest<ErrorOr<AgentBalanceResult>>;
 
 public sealed class DebitAgentCommandHandler : IRequestHandler<DebitAgentCommand, ErrorOr<AgentBalanceResult>>
 {
     private readonly IAgentRepository _agents;
     private readonly IUnitOfWork _uow;
+    private readonly IAgentBalanceHistoryRepository _balanceHistory;
 
-    public DebitAgentCommandHandler(IAgentRepository agents, IUnitOfWork uow)
+    public DebitAgentCommandHandler(
+        IAgentRepository agents,
+        IUnitOfWork uow,
+        IAgentBalanceHistoryRepository balanceHistory)
     {
         _agents = agents;
         _uow = uow;
+        _balanceHistory = balanceHistory;
     }
 
     public async Task<ErrorOr<AgentBalanceResult>> Handle(DebitAgentCommand cmd, CancellationToken ct)
@@ -35,11 +40,37 @@ public sealed class DebitAgentCommandHandler : IRequestHandler<DebitAgentCommand
 
         try
         {
-            await _uow.ExecuteTransactionalAsync(_ =>
+            var existingHistory = await _balanceHistory.GetByDocIdAsync(cmd.AgentId, currency, cmd.DocId, ct);
+            if (existingHistory is not null)
             {
+                return new AgentBalanceResult
+                {
+                    Currency = currency,
+                    BalanceMinor = existingHistory.NewBalanceMinor
+                };
+            }
+
+            await _uow.ExecuteTransactionalAsync(async _ =>
+            {
+                var nowUtc = DateTime.UtcNow;
+                var currentBalance = agent.Balances.TryGetValue(currency, out var current) ? current : 0L;
+
                 agent.Debit(currency, cmd.AmountMinor);
                 _agents.Update(agent);
-                return Task.FromResult(true);
+
+                var newBalance = agent.Balances.TryGetValue(currency, out var updated) ? updated : currentBalance - cmd.AmountMinor;
+
+                var history = AgentBalanceHistory.CreateForAbsDocument(
+                    agent.Id,
+                    cmd.DocId,
+                    nowUtc,
+                    currency,
+                    currentBalance,
+                    -cmd.AmountMinor,
+                    newBalance);
+                _balanceHistory.Add(history);
+
+                return true;
             }, ct);
         }
         catch (DomainException ex) when (ex.Message.Contains("Insufficient", StringComparison.OrdinalIgnoreCase))

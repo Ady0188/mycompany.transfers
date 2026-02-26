@@ -25,47 +25,13 @@ public sealed class EncryptedTerminalCredentialsArchiveBuilder : ITerminalCreden
     {
         try
         {
-            //var password = GeneratePassword();
-            //var payload = new
-            //{
-            //    terminal.Id,
-            //    terminal.AgentId,
-            //    terminal.Name,
-            //    terminal.ApiKey,
-            //    terminal.Secret,
-            //    terminal.Active
-            //};
-            //var json = JsonSerializer.Serialize(payload, JsonOptions);
-            //var jsonBytes = Encoding.UTF8.GetBytes(json);
-
-            //var ms = new MemoryStream();
-            //using (var zipStream = new ZipOutputStream(ms))
-            //{
-            //    zipStream.SetLevel(3);
-            //    zipStream.Password = password;
-
-            //    var entry = new ZipEntry("terminal_credentials.json")
-            //    {
-            //        AESKeySize = 256,
-            //        DateTime = DateTime.Now
-            //    };
-            //    zipStream.PutNextEntry(entry);
-            //    zipStream.Write(jsonBytes, 0, jsonBytes.Length);
-            //    zipStream.CloseEntry();
-            //}
-            //ms.Position = 0;
-            //return (ms, password);
-
             var password = GeneratePassword();
 
             var payload = new
             {
-                terminal.Id,
                 terminal.AgentId,
-                terminal.Name,
                 terminal.ApiKey,
-                terminal.Secret,
-                terminal.Active
+                terminal.Secret
             };
 
             var jsonBytes = Encoding.UTF8.GetBytes(
@@ -76,11 +42,11 @@ public sealed class EncryptedTerminalCredentialsArchiveBuilder : ITerminalCreden
 
             using (var zipStream = new ZipOutputStream(ms))
             {
-                zipStream.IsStreamOwner = false; // ✅ не закрывать ms при Dispose
+                zipStream.IsStreamOwner = false;
                 zipStream.SetLevel(3);
                 zipStream.Password = password;
 
-                var entry = new ZipEntry("terminal_credentials.json")
+                var entry = new ZipEntry("credentials.json")
                 {
                     AESKeySize = 256,
                     DateTime = DateTime.Now
@@ -90,7 +56,7 @@ public sealed class EncryptedTerminalCredentialsArchiveBuilder : ITerminalCreden
                 zipStream.Write(jsonBytes, 0, jsonBytes.Length);
                 zipStream.CloseEntry();
 
-                zipStream.Finish(); // ✅ дописывает структуры ZIP
+                zipStream.Finish();
             }
 
             ms.Position = 0;
@@ -98,7 +64,6 @@ public sealed class EncryptedTerminalCredentialsArchiveBuilder : ITerminalCreden
         }
         catch (Exception ex)
         {
-
             throw;
         }
     }

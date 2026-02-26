@@ -1,5 +1,6 @@
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
+using MyCompany.Transfers.Domain.Agents;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
@@ -33,6 +34,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                 var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
                 var transferRepository = scope.ServiceProvider.GetRequiredService<ITransferRepository>();
                 var agentRepository = scope.ServiceProvider.GetRequiredService<IAgentReadRepository>();
+                var balanceHistoryRepository = scope.ServiceProvider.GetRequiredService<IAgentBalanceHistoryRepository>();
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                 var pending = await outboxRepository.GetPendingsAsync();
@@ -46,6 +48,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                         transferRepository,
                         outboxRepository,
                         agentRepository,
+                        balanceHistoryRepository,
                         unitOfWork,
                         stoppingToken);
 
@@ -69,6 +72,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
         ITransferRepository transferRepository,
         IOutboxRepository outboxRepository,
         IAgentReadRepository agentRepository,
+        IAgentBalanceHistoryRepository balanceHistoryRepository,
         IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
@@ -87,6 +91,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                     transferRepository,
                     outboxRepository,
                     agentRepository,
+                    balanceHistoryRepository,
                     unitOfWork,
                     ct);
             }
@@ -116,6 +121,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
         ITransferRepository transferRepository,
         IOutboxRepository outboxRepository,
         IAgentReadRepository agentRepository,
+        IAgentBalanceHistoryRepository balanceHistoryRepository,
         IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
@@ -254,7 +260,27 @@ internal sealed class ProviderSenderWorker : BackgroundService
                     status: trnSts);
 
                 var agent = await agentRepository.GetForUpdateSqlAsync(transfer.AgentId, ct);
-                agent?.Credit(transfer.CurrentQuote!.Total.Currency, transfer.CurrentQuote.Total.Minor);
+                if (agent is not null)
+                {
+                    var totalRefund = transfer.CurrentQuote!.Total;
+                    var refundRefId = $"{transfer.Id}:Refund";
+                    var alreadyRefunded = await balanceHistoryRepository.ExistsByReferenceAsync(agent.Id, totalRefund.Currency, BalanceHistoryReferenceType.Transfer, refundRefId, ct);
+                    if (!alreadyRefunded)
+                    {
+                        var currentBalance = agent.Balances.TryGetValue(totalRefund.Currency, out var cr) ? cr : 0L;
+                        agent.Credit(totalRefund.Currency, totalRefund.Minor);
+                        var newBalance = agent.Balances.TryGetValue(totalRefund.Currency, out var up) ? up : currentBalance + totalRefund.Minor;
+                        var refundHistory = AgentBalanceHistory.CreateForTransfer(
+                            agent.Id,
+                            refundRefId,
+                            nowUtc.UtcDateTime,
+                            totalRefund.Currency,
+                            currentBalance,
+                            totalRefund.Minor,
+                            newBalance);
+                        balanceHistoryRepository.Add(refundHistory);
+                    }
+                }
             }
 
             return true;

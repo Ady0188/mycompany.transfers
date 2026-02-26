@@ -18,6 +18,8 @@ namespace MyCompany.Transfers.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext, IUnitOfWork
 {
     public DbSet<Agent> Agents => Set<Agent>();
+    public DbSet<AgentBalanceHistory> AgentBalanceHistories => Set<AgentBalanceHistory>();
+    public DbSet<AgentDailyBalance> AgentDailyBalances => Set<AgentDailyBalance>();
     public DbSet<Terminal> Terminals => Set<Terminal>();
     public DbSet<SentCredentialsEmail> SentCredentialsEmails => Set<SentCredentialsEmail>();
     public DbSet<Service> Services => Set<Service>();
@@ -74,6 +76,48 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.SettingsJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
             eb.Property(x => x.PartnerEmail).HasMaxLength(256);
             eb.Property(x => x.Locale).IsRequired().HasMaxLength(8).HasDefaultValue("ru");
+        });
+
+        b.Entity<AgentBalanceHistory>(eb =>
+        {
+            eb.HasKey(x => x.Id);
+            eb.Property(x => x.AgentId).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.DocId).IsRequired(false);
+            eb.Property(x => x.CreatedAtUtc).IsRequired();
+            eb.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            eb.Property(x => x.CurrentBalanceMinor).HasColumnType("bigint").IsRequired();
+            eb.Property(x => x.IncomeMinor).HasColumnType("bigint").IsRequired();
+            eb.Property(x => x.NewBalanceMinor).HasColumnType("bigint").IsRequired();
+            eb.Property(x => x.ReferenceType).HasConversion<string>().HasMaxLength(16).IsRequired();
+            eb.Property(x => x.ReferenceId).HasMaxLength(128).IsRequired();
+
+            eb.HasIndex(x => new { x.AgentId, x.Currency, x.ReferenceType, x.ReferenceId })
+                .IsUnique()
+                .HasDatabaseName("IX_AgentBalanceHistory_AgentId_Currency_ReferenceType_ReferenceId");
+            eb.HasIndex(x => new { x.AgentId, x.Currency, x.CreatedAtUtc })
+                .HasDatabaseName("IX_AgentBalanceHistory_AgentId_Currency_CreatedAtUtc");
+
+            eb.ToTable("AgentBalanceHistory");
+        });
+
+        b.Entity<AgentDailyBalance>(eb =>
+        {
+            eb.HasKey(x => x.Id);
+            eb.Property(x => x.AgentId).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.Date).IsRequired();
+            eb.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            eb.Property(x => x.OpeningBalanceMinor).HasColumnType("bigint").IsRequired();
+            eb.Property(x => x.ClosingBalanceMinor).HasColumnType("bigint").IsRequired();
+            eb.Property(x => x.TimeZoneId).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.Scope).HasConversion<string>().HasMaxLength(16).IsRequired();
+
+            eb.HasIndex(x => new { x.AgentId, x.Currency, x.Date, x.TimeZoneId, x.Scope })
+                .IsUnique()
+                .HasDatabaseName("IX_AgentDailyBalance_AgentId_Currency_Date_TimeZoneId_Scope");
+            eb.HasIndex(x => new { x.AgentId, x.Date })
+                .HasDatabaseName("IX_AgentDailyBalance_AgentId_Date");
+
+            eb.ToTable("AgentDailyBalance");
         });
 
         b.Entity<Terminal>(eb =>

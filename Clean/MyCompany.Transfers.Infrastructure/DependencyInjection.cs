@@ -66,6 +66,8 @@ public static class DependencyInjection
 
         services.AddScoped<ISentCredentialsEmailRepository, SentCredentialsEmailRepository>();
 
+        services.AddScoped<IAgentBalanceHistoryRepository, AgentBalanceHistoryRepository>();
+
         services.AddScoped<ParameterRepository>();
         services.AddScoped<IParameterRepository>(sp =>
             new CachedParameterRepository(sp.GetRequiredService<ParameterRepository>(), sp.GetRequiredService<ICacheService>()));
@@ -95,6 +97,7 @@ public static class DependencyInjection
         });
 
         services.AddHostedService<ProviderSenderWorker>();
+        services.AddHostedService<DailyBalanceWorker>();
 
         var encKey = configuration[$"{CredentialsEncryptionOptions.SectionName}:KeyBase64"];
         if (!string.IsNullOrWhiteSpace(encKey))

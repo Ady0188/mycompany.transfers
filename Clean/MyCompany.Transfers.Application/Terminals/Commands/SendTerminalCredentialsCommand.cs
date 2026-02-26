@@ -48,7 +48,7 @@ public sealed class SendTerminalCredentialsCommandHandler : IRequestHandler<Send
             : request.Subject;
 
         var (zipStream, password) = _archiveBuilder.Build(terminal);
-        var fileName = $"terminal_{terminal.Id}_credentials.zip";
+        var fileName = $"credentials.zip";
         try
         {
             await _emailSender.SendAsync(

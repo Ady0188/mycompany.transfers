@@ -28,7 +28,7 @@ public sealed class AbsController : BaseController
     [HttpPost("agents/{agentId}/credit")]
     public async Task<IActionResult> Credit(string agentId, [FromBody] AbsBalanceRequest body, CancellationToken ct)
     {
-        var cmd = new CreditAgentCommand(agentId, body.Currency, body.AmountMinor);
+        var cmd = new CreditAgentCommand(agentId, body.Currency, body.AmountMinor, body.DocId);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(ok => Ok(ok), Problem);
     }
@@ -39,7 +39,7 @@ public sealed class AbsController : BaseController
     [HttpPost("agents/{agentId}/debit")]
     public async Task<IActionResult> Debit(string agentId, [FromBody] AbsBalanceRequest body, CancellationToken ct)
     {
-        var cmd = new DebitAgentCommand(agentId, body.Currency, body.AmountMinor);
+        var cmd = new DebitAgentCommand(agentId, body.Currency, body.AmountMinor, body.DocId);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(ok => Ok(ok), Problem);
     }
@@ -48,4 +48,4 @@ public sealed class AbsController : BaseController
 /// <summary>
 /// Тело запроса для кредитования/дебитования.
 /// </summary>
-public sealed record AbsBalanceRequest(string Currency, long AmountMinor);
+public sealed record AbsBalanceRequest(string Currency, long AmountMinor, long DocId);
