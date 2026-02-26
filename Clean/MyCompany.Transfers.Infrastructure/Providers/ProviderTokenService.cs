@@ -81,7 +81,7 @@ public sealed class ProviderTokenService : IProviderTokenService
                     throw new InvalidOperationException($"Provider '{providerId}' not found or disabled");
 
                 var settings = DeserializeSettings(provider.SettingsJson);
-                settings.Token = newToken;
+                settings.Common["token"] = newToken;
                 provider.UpdateSettings(JsonSerializer.Serialize(settings, JsonOptions));
 
                 await db.SaveChangesAsync(ct);
@@ -108,7 +108,7 @@ public sealed class ProviderTokenService : IProviderTokenService
         var now = DateTimeOffset.UtcNow;
         var absoluteExpiration = expiresAtUtc ?? now.AddMinutes(2);
         _cache.Set(GetCacheKey(providerId), new TokenCacheEntry(token, expiresAtUtc),
-            new MemoryCacheEntryOptions { AbsoluteExpiration = absoluteExpiration });
+            new MemoryCacheEntryOptions { AbsoluteExpiration = absoluteExpiration, Size = Math.Max(1, token.Length) });
     }
 
     private static ProviderSettings DeserializeSettings(string json)
