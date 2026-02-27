@@ -48,7 +48,7 @@ public static class SberSignExtensions
                 var xmlArgument = Convert.ToBase64String(Encoding.UTF8.GetBytes(xml));
                 var psi = new ProcessStartInfo(javaExecutablePath)
                 {
-                    Arguments = $"-Dfile.encoding=UTF-8 -cp \"{Path.Combine(jarDirFull, runFileName)}\" tj.company.Main {xmlArgument} {keyPath} {keyPass}",
+                    Arguments = $"-Dfile.encoding=UTF-8 -cp \"{Path.Combine(jarDirFull, runFileName)}\" tj.ibt.Main {xmlArgument} {keyPath} {keyPass}",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,

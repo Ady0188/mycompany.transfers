@@ -1,7 +1,8 @@
+using MyCompany.Transfers.Application.Common.Providers;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
-using MyCompany.Transfers.Application.Common.Providers;
 
 namespace MyCompany.Transfers.Infrastructure.Helpers;
 
@@ -112,6 +113,26 @@ public static class ProviderRequestExtensions
                     tempResult = format is null
                         ? Guid.NewGuid().ToString("D")
                         : Guid.NewGuid().ToString(format);
+                }
+                else if (name.Equals("SberRqUID", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Create a 16-byte array to hold the random bytes
+                    var buffer = new byte[16];
+
+                    // Generate 16 random bytes using a cryptographically secure random number generator
+                    using (var rng = RandomNumberGenerator.Create())
+                    {
+                        rng.GetBytes(buffer);
+                    }
+
+                    // Convert the bytes to a hexadecimal string
+                    var hex = new StringBuilder(32);
+                    foreach (var b in buffer)
+                    {
+                        hex.Append(b.ToString("x2")); // Format each byte as a 2-digit hexadecimal string
+                    }
+
+                    return hex.ToString();
                 }
                 else if (name.Equals("Now", StringComparison.OrdinalIgnoreCase))
                 {

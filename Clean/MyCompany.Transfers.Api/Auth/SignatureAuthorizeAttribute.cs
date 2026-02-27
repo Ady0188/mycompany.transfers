@@ -16,7 +16,7 @@ public sealed class SignatureAuthorizeAttribute : Attribute, IAsyncAuthorization
         var terminals = context.HttpContext.RequestServices.GetRequiredService<ITerminalRepository>();
         var req = context.HttpContext.Request;
         var apiKey = req.Headers["X-Api-Key"].ToString();
-        var sign = req.Headers["X-MyCompany-Signature"].ToString();
+        var sign = req.Headers["X-IBT-Signature"].ToString();
         var unauthorizedError = AppErrors.Common.Unauthorized();
 
         if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(sign))
@@ -50,7 +50,7 @@ public sealed class SignatureAuthorizeAttribute : Attribute, IAsyncAuthorization
         using var sha = SHA256.Create();
         var bodyHash = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(body ?? "")));
         var expected = ComputeHmac(term.Secret, bodyHash);
-        var signHex = req.Headers["X-MyCompany-Signature"].ToString();
+        var signHex = req.Headers["X-IBT-Signature"].ToString();
 
         if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(signHex), Convert.FromHexString(expected)))
         {

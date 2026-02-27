@@ -3,12 +3,13 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Infrastructure.Caching;
 using MyCompany.Transfers.Infrastructure.Email;
 using MyCompany.Transfers.Infrastructure.Encryption;
+using MyCompany.Transfers.Infrastructure.Helpers;
 using MyCompany.Transfers.Infrastructure.Persistence;
-using Microsoft.Extensions.Options;
 using MyCompany.Transfers.Infrastructure.Providers;
 using MyCompany.Transfers.Infrastructure.Repositories;
 using MyCompany.Transfers.Infrastructure.Workers;
@@ -30,6 +31,9 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure())
                 .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
+
+        services.AddSingleton<IDbOracleConnectionFactory>(serviceProvider =>
+            new OracleConnectionFactory(serviceProvider.GetRequiredService<IConfiguration>()["ConnectionStrings:OracleConnection"]!));
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 
@@ -96,8 +100,8 @@ public static class DependencyInjection
             return handler;
         });
 
-        services.AddHostedService<ProviderSenderWorker>();
-        services.AddHostedService<DailyBalanceWorker>();
+        //services.AddHostedService<ProviderSenderWorker>();
+        //services.AddHostedService<DailyBalanceWorker>();
 
         var encKey = configuration[$"{CredentialsEncryptionOptions.SectionName}:KeyBase64"];
         if (!string.IsNullOrWhiteSpace(encKey))

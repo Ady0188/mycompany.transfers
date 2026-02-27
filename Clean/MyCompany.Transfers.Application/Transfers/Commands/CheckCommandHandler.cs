@@ -85,19 +85,25 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
                 service.AllowedCurrencies.First(), service.Name, null, null, DateTimeOffset.UtcNow);
 
             var providerResult = await _providerService.SendAsync(service.ProviderId, providerReq, ct);
-            if (providerResult.Status != OutboxStatus.SETTING && providerResult.Status != OutboxStatus.SUCCESS)
+            if (providerResult.Status == OutboxStatus.NOT_FOUND)
+            {
+                return AppErrors.Common.NotFound(providerResult.Error);
+            }
+            else if (providerResult.Status != OutboxStatus.SETTING && providerResult.Status != OutboxStatus.SUCCESS)
             {
                 return AppErrors.Common.Validation($"Provider check failed: {providerResult.Error}");
             }
 
             var parameters = new Dictionary<string, string>();
-            if (providerResult.ResponseFields.TryGetValue("data.fullname", out var fullname))
+            if (providerResult.ResponseFields.TryGetValue("receiver_fullname", out var fullname))
                 parameters["reciver_fullname"] = fullname;
+            if (providerResult.ResponseFields.TryGetValue("receiver_birth_date", out var birthDate))
+                parameters["receiver_birth_date"] = birthDate;
 
             var availableCurrencies = new List<CurrencyDto>();
             var allowedCurrencies = service.AllowedCurrencies.ToList();
             var clientCurrencies = new List<string>();
-            if (providerResult.ResponseFields.TryGetValue("data.currencies", out var clientCurrenciesStr))
+            if (providerResult.ResponseFields.TryGetValue("currencies", out var clientCurrenciesStr))
                 clientCurrencies = clientCurrenciesStr.Split(",").ToList();
 
             if (providerResult.Status != OutboxStatus.SETTING && clientCurrencies.Count == 0)

@@ -13,7 +13,7 @@ namespace MyCompany.Transfers.Infrastructure.Providers;
 
 public sealed class SberClient : IProviderClient
 {
-    public string ProviderId => "Sber";
+    public string ProviderId => "SberBank";
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<SberClient> _logger;
@@ -79,10 +79,16 @@ public sealed class SberClient : IProviderClient
         if (string.IsNullOrEmpty(signature))
             return new ProviderResult(OutboxStatus.TECHNICAL, new Dictionary<string, string>(), "Sber sign generation failed");
 
-        http.DefaultRequestHeaders.Remove("Signature");
-        http.DefaultRequestHeaders.Remove("RqUID");
-        http.DefaultRequestHeaders.Add("RqUID", GenerateRqUID());
-        http.DefaultRequestHeaders.Add("Signature", signature);
+        replacements["SberSignature"] = signature;
+
+        if (op.HeaderTemplate is not null)
+        {
+            foreach (var (key, valueTemplate) in op.HeaderTemplate)
+            {
+                var value = valueTemplate.ApplyTemplate(replacements, false, new Dictionary<string, string>());
+                http.DefaultRequestHeaders.TryAddWithoutValidation(key, value);
+            }
+        }
 
         var content = new StringContent(canonicalXml, Encoding.UTF8, "application/xml");
         var response = await http.PostAsync(op.PathTemplate, content, ct);
@@ -121,8 +127,17 @@ public sealed class SberClient : IProviderClient
         if (string.IsNullOrEmpty(signature))
             return new ProviderResult(OutboxStatus.TECHNICAL, new Dictionary<string, string>(), "Sber sign generation failed");
 
-        http.DefaultRequestHeaders.Remove("Signature");
-        http.DefaultRequestHeaders.Add("Signature", signature);
+
+        replacements["SberSignature"] = signature;
+
+        if (op.HeaderTemplate is not null)
+        {
+            foreach (var (key, valueTemplate) in op.HeaderTemplate)
+            {
+                var value = valueTemplate.ApplyTemplate(replacements, false, new Dictionary<string, string>());
+                http.DefaultRequestHeaders.TryAddWithoutValidation(key, value);
+            }
+        }
 
         var content = new StringContent(canonicalXml, Encoding.UTF8, "application/xml");
         var response = await http.PostAsync(op.PathTemplate, content, ct);

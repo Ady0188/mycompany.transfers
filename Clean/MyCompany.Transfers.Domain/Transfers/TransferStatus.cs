@@ -23,5 +23,6 @@ public enum OutboxStatus
     EXPIRED,
     FRAUD,
     NORESPONSE,
-    SETTING
+    SETTING,
+    NOT_FOUND
 }
