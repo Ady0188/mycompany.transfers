@@ -62,7 +62,8 @@ internal sealed class DailyBalanceWorker : BackgroundService
     {
         var tz = GetTimeZoneSafe(bankTimeZoneId);
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, tz);
-        var targetDate = localNow.Date.AddDays(-1); // закрываем вчерашний день
+        var targetDateLocal = localNow.Date.AddDays(-1); // локальная календарная дата
+        var targetDate = DateTime.SpecifyKind(targetDateLocal, DateTimeKind.Utc); // для timestamptz в БД требуется UTC
 
         if (targetDate < DateTime.UnixEpoch.Date)
             return;
@@ -138,7 +139,8 @@ internal sealed class DailyBalanceWorker : BackgroundService
         {
             var tz = GetTimeZoneSafe(agent.TimeZoneId);
             var localNow = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, tz);
-            var targetDate = localNow.Date.AddDays(-1);
+            var targetDateLocal = localNow.Date.AddDays(-1);
+            var targetDate = DateTime.SpecifyKind(targetDateLocal, DateTimeKind.Utc);
 
             if (targetDate < DateTime.UnixEpoch.Date)
                 continue;
