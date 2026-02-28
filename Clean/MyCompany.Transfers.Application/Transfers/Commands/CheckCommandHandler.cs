@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using MyCompany.Transfers.Application.Common.Helpers;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
+using MyCompany.Transfers.Domain.Services;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Domain.Transfers.Dtos;
 
@@ -94,11 +95,9 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
                 return AppErrors.Common.Validation($"Provider check failed: {providerResult.Error}");
             }
 
-            var parameters = new Dictionary<string, string>();
-            if (providerResult.ResponseFields.TryGetValue("receiver_fullname", out var fullname))
-                parameters["reciver_fullname"] = fullname;
-            if (providerResult.ResponseFields.TryGetValue("receiver_birth_date", out var birthDate))
-                parameters["receiver_birth_date"] = birthDate;
+            // ResolvedParameters: только поля из определения параметров услуги (ParameterDefinition),
+            // значения из стандартизированного ответа провайдера (ResponseFields по Code).
+            var parameters = BuildResolvedParameters(service, providerResult.ResponseFields);
 
             var availableCurrencies = new List<CurrencyDto>();
             var allowedCurrencies = service.AllowedCurrencies.ToList();
@@ -140,5 +139,25 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
             _logger.LogError(ex, "CheckCommandHandler unexpected error");
             return AppErrors.Common.Unexpected();
         }
+    }
+
+    /// <summary>
+    /// Собирает ResolvedParameters по определению параметров услуги (ParameterDefinition):
+    /// в ответ попадают только те поля, которые объявлены у услуги, с ключами Code из справочника.
+    /// </summary>
+    private static Dictionary<string, string> BuildResolvedParameters(Service service, IReadOnlyDictionary<string, string> responseFields)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (service.Parameters is null || responseFields is null) return parameters;
+
+        foreach (var serviceParam in service.Parameters)
+        {
+            var code = serviceParam.Parameter?.Code;
+            if (string.IsNullOrWhiteSpace(code)) continue;
+            if (!responseFields.TryGetValue(code, out var value) || string.IsNullOrWhiteSpace(value)) continue;
+            parameters[code] = value;
+        }
+
+        return parameters;
     }
 }
