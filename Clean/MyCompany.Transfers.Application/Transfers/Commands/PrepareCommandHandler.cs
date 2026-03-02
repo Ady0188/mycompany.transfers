@@ -179,11 +179,29 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
 
             if (provider.IsOnline)
             {
-                var providerReq = new ProviderRequest(
-                    agent.Id, "prepare", transfer.Id.ToString(), transfer.NumId, transfer.ExternalId,
-                    service.Id, service.ProviderServiceId, transfer.Account,
-                    transfer.CurrentQuote!.CreditedAmount.Minor, transfer.CurrentQuote!.ProviderFee.Minor,
-                    service.AllowedCurrencies.First(), service.Name, transfer.Parameters, null, transfer.CreatedAtUtc);
+                var providerReq = new ProviderRequest(Source: agent.Id,
+                    SourceAccount: string.Empty,
+                    SourceCurrency: string.Empty,
+                    Destination: string.Empty,
+                    DestinationAccount: string.Empty,
+                    SourceAmount: 0,
+                    SourceFeeAmount: 0,
+                    TotalAmount: 0,
+                    Operation: "prepare", 
+                    TransferId: transfer.Id.ToString(),
+                    NumId: transfer.NumId, 
+                    ExternalId: transfer.ExternalId,
+                    ServiceId: service.Id, 
+                    ProviderServiceId: service.ProviderServiceId, 
+                    Account: transfer.Account,
+                    CreditAmount: transfer.CurrentQuote!.CreditedAmount.Minor, 
+                    ProviderFee: transfer.CurrentQuote!.ProviderFee.Minor,
+                    CurrencyIsoCode: service.AllowedCurrencies.First(),
+                    ExchangeRate: 0,
+                    Proc: service.Name, 
+                    Parameters: transfer.Parameters, 
+                    ProvReceivedParams: null, 
+                    TransferDateTime: transfer.CreatedAtUtc);
 
                 var providerResult = await _providerService.SendAsync(service.ProviderId, providerReq, ct);
 

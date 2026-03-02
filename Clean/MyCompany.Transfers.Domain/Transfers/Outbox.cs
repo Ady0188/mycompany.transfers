@@ -94,4 +94,9 @@ public sealed class Outbox : IAggregateRoot
         if (kind == ProviderResultKind.Success || kind == ProviderResultKind.Error || kind == ProviderResultKind.Technical)
             CompletedAtUtc = now;
     }
+
+    public void ApplySentToAbsResult(OutboxStatus status)
+    {
+        Status = status;
+    }
 }

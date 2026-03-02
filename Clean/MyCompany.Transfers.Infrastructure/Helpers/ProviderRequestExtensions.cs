@@ -20,12 +20,20 @@ public static class ProviderRequestExtensions
             ["ServiceId"] = r.ServiceId,
             ["ProviderServiceId"] = r.ProviderServiceId,
             ["Account"] = r.Account,
+            ["SourceAmount"] = r.SourceAmount,
+            ["SourceFeeAmount"] = r.SourceFeeAmount,
+            ["TotalAmount"] = r.TotalAmount,
             ["CreditAmount"] = r.CreditAmount,
             ["CreditCurrency"] = new Currency(r.CurrencyIsoCode),
             ["Source"] = r.Source,
+            ["SourceAccount"] = r.SourceAccount,
+            ["SourceCurrency"] = new Currency(r.SourceCurrency),
+            ["Destination"] = r.Destination,
+            ["DestinationAccount"] = r.DestinationAccount,
             ["DateTime"] = dateTime.Local,
             ["Proc"] = r.Proc,
-            ["ProviderFee"] = r.ProviderFee
+            ["ProviderFee"] = r.ProviderFee,
+            ["ExchangeRate"] = r.ExchangeRate
         };
     }
 
@@ -114,6 +122,22 @@ public static class ProviderRequestExtensions
                         ? Guid.NewGuid().ToString("D")
                         : Guid.NewGuid().ToString(format);
                 }
+                else if (name.Equals("TransferDetails", StringComparison.OrdinalIgnoreCase))
+                {
+                    Dictionary<string, object> transDetails = new Dictionary<string, object>();
+
+                    foreach (var kv in values.Where(x => x.Key.StartsWith("Param.sender")))
+                    {
+                        transDetails[kv.Key.Replace("Param.", "")] = kv.Value ?? string.Empty;
+                    }
+
+                    foreach (var kv in values.Where(x => x.Key.StartsWith("Param.receiver")))
+                    {
+                        transDetails[kv.Key.Replace("Param.", "")] = kv.Value ?? string.Empty;
+                    }
+
+                    tempResult = transDetails.ToXml("transfer_details");
+                }
                 else if (name.Equals("SberRqUID", StringComparison.OrdinalIgnoreCase))
                 {
                     // Create a 16-byte array to hold the random bytes
@@ -132,7 +156,7 @@ public static class ProviderRequestExtensions
                         hex.Append(b.ToString("x2")); // Format each byte as a 2-digit hexadecimal string
                     }
 
-                    return hex.ToString();
+                    tempResult = hex.ToString();
                 }
                 else if (name.Equals("Now", StringComparison.OrdinalIgnoreCase))
                 {

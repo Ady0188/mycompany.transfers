@@ -24,5 +24,6 @@ public enum OutboxStatus
     FRAUD,
     NORESPONSE,
     SETTING,
-    NOT_FOUND
+    NOT_FOUND,
+    SENT_TO_ABS
 }

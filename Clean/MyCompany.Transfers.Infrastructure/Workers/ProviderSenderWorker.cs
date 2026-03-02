@@ -8,11 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace MyCompany.Transfers.Infrastructure.Workers;
-
-/// <summary>
-/// Фоновый воркер, который берёт сообщения из Outbox и отправляет их в провайдеров через IProviderService.
-/// Поведение перенесено из оригинального проекта.
-/// </summary>
 internal sealed class ProviderSenderWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -156,21 +151,29 @@ internal sealed class ProviderSenderWorker : BackgroundService
             else
             {
                 var providerRequest = new ProviderRequest(
-                    msg.Source,
-                    operation,
-                    msg.TransferId.ToString(),
-                    msg.NumId,
-                    msg.ExternalId,
-                    msg.ServiceId,
+                    Source: msg.Source,
+                    SourceAccount: string.Empty,
+                    SourceCurrency: string.Empty,
+                    Destination: string.Empty,
+                    DestinationAccount: string.Empty,
+                    Operation: operation,
+                    TransferId: msg.TransferId.ToString(),
+                    NumId: msg.NumId,
+                    ExternalId: msg.ExternalId,
+                    ServiceId: msg.ServiceId,
                     msg.ProviderServiceId,
-                    msg.Account,
-                    msg.CurrentQuote!.CreditedAmount.Minor,
-                    msg.CurrentQuote!.ProviderFee.Minor,
-                    msg.CurrentQuote!.CreditedAmount.Currency,
-                    "",
-                    msg.Parameters,
-                    msg.ProvReceivedParams,
-                    msg.CreatedAtUtc);
+                    Account: msg.Account,
+                    SourceAmount: 0,
+                    SourceFeeAmount: 0,
+                    TotalAmount: 0,
+                    CreditAmount: msg.CurrentQuote!.CreditedAmount.Minor,
+                    ProviderFee: msg.CurrentQuote!.ProviderFee.Minor,
+                    CurrencyIsoCode: msg.CurrentQuote!.CreditedAmount.Currency,
+                    ExchangeRate: 0,
+                    Proc: "",
+                    Parameters: msg.Parameters,
+                    ProvReceivedParams: msg.ProvReceivedParams,
+                    TransferDateTime: msg.CreatedAtUtc);
 
                 providerResult = await providerService.SendAsync(
                     msg.ProviderId,

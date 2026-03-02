@@ -102,6 +102,7 @@ public static class DependencyInjection
 
         //services.AddHostedService<ProviderSenderWorker>();
         //services.AddHostedService<DailyBalanceWorker>();
+        //services.AddHostedService<TransferToABSSenderWorker>();
 
         var encKey = configuration[$"{CredentialsEncryptionOptions.SectionName}:KeyBase64"];
         if (!string.IsNullOrWhiteSpace(encKey))

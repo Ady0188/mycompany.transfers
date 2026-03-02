@@ -5,6 +5,7 @@ namespace MyCompany.Transfers.Application.Common.Interfaces;
 public interface IOutboxReadRepository
 {
     Task<List<Outbox>> GetPendingsAsync();
+    Task<List<Outbox>> GetSucceededAsync();
 }
 
 public interface IOutboxRepository : IOutboxReadRepository

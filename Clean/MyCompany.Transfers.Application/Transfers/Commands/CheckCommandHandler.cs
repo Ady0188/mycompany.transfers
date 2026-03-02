@@ -81,9 +81,29 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
             if (!await _providerService.ExistsEnabledAsync(service.ProviderId, ct))
                 return AppErrors.Common.Validation($"Провайдер '{service.ProviderId}' не найден или отключён.");
 
-            var providerReq = new ProviderRequest(
-                agent.Id, "check", string.Empty, 0, string.Empty, service.Id, service.ProviderServiceId, m.Account, 0, 0,
-                service.AllowedCurrencies.First(), service.Name, null, null, DateTimeOffset.UtcNow);
+            var providerReq = new ProviderRequest(Source: agent.Id,
+                SourceAccount: string.Empty,
+                SourceCurrency: string.Empty,
+                Destination: string.Empty,
+                DestinationAccount: string.Empty,
+                SourceAmount: 0,
+                SourceFeeAmount: 0,
+                TotalAmount: 0,
+                Operation: "check",
+                TransferId: string.Empty, 
+                NumId: 0,
+                ExternalId: string.Empty,
+                ServiceId: service.Id,
+                ProviderServiceId: service.ProviderServiceId,
+                Account: m.Account,
+                CreditAmount: 0,
+                ProviderFee: 0,
+                CurrencyIsoCode: service.AllowedCurrencies.First(),
+                ExchangeRate: 0,
+                Proc: service.Name,
+                Parameters: null,
+                ProvReceivedParams: null, 
+                TransferDateTime: DateTimeOffset.UtcNow);
 
             var providerResult = await _providerService.SendAsync(service.ProviderId, providerReq, ct);
             if (providerResult.Status == OutboxStatus.NOT_FOUND)

@@ -18,4 +18,9 @@ public sealed class OutboxRepository : IOutboxRepository
         _db.Outboxes
             .Where(x => x.Status == OutboxStatus.TO_SEND || x.Status == OutboxStatus.SENDING || x.Status == OutboxStatus.STATUS)
             .ToListAsync();
+
+    public Task<List<Outbox>> GetSucceededAsync() =>
+        _db.Outboxes
+            .Where(x => x.Status == OutboxStatus.SUCCESS)
+            .ToListAsync();
 }

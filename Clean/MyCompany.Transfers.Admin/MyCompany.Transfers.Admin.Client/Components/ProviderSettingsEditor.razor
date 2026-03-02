@@ -288,7 +288,7 @@ else
     private static (string json, List<string> placeholders) ReplaceTemplatePlaceholdersForJson(string raw)
     {
         var placeholders = new List<string>();
-        var pattern = new Regex(@"\[([^\]]+)\]");
+        var pattern = new Regex(@"\[([^\]]+)\]"); 
         var clean = pattern.Replace(raw, m =>
         {
             var token = m.Value;
