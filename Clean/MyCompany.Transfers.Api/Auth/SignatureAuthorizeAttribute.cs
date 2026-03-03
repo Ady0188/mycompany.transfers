@@ -41,7 +41,7 @@ public sealed class SignatureAuthorizeAttribute : Attribute, IAsyncAuthorization
             });
             return;
         }
-
+        
         req.EnableBuffering();
         using var sr = new StreamReader(req.Body, Encoding.UTF8, leaveOpen: true);
         var body = await sr.ReadToEndAsync();

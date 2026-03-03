@@ -17,6 +17,7 @@ builder.Services.AddScoped<AuthHeaderHandler>();
 builder.Services.AddScoped<IAgentsApiService, AgentsApiService>();
 builder.Services.AddScoped<IProvidersApiService, ProvidersApiService>();
 builder.Services.AddScoped<IFxRatesApiService, FxRatesApiService>();
+builder.Services.AddScoped<ITransfersApiService, TransfersApiService>();
 builder.Services.AddHttpClient("Api", (sp, client) =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();

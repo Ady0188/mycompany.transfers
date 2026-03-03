@@ -1,0 +1,232 @@
+@page "/transfers"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject ITransfersApiService Api
+@inject IAgentsApiService AgentsApi
+@inject IProvidersApiService ProvidersApi
+@inject IServicesApiService ServicesApi
+@inject ISnackbar Snackbar
+
+<PageTitle>Переводы — Админ-панель</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4" GutterBottom="false">Переводы</MudText>
+    </MudStack>
+
+    <MudCard Elevation="2">
+        <MudExpansionPanels Class="pa-2" Elevation="0">
+            <MudExpansionPanel Text="Фильтр" Icon="@Icons.Material.Filled.FilterList" is-initially-expanded="@_filterExpanded">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudTextField @bind-Value="_filter.Id" Label="Id перевода" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Placeholder="Guid" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudTextField @bind-Value="_filter.ExternalId" Label="ExternalId" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSelect @bind-Value="_filter.AgentId" Label="Агент" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                            @foreach (var a in _agents)
+                            {
+                                <MudSelectItem Value="@a.Id">@(a.Name ?? a.Id)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSelect @bind-Value="_filter.ProviderId" Label="Провайдер" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                            @foreach (var p in _providers)
+                            {
+                                <MudSelectItem Value="@p.Id">@(p.Name ?? p.Id)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSelect @bind-Value="_filter.ServiceId" Label="Услуга" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                            @foreach (var s in FilteredServices)
+                            {
+                                <MudSelectItem Value="@s.Id">@(s.Name ?? s.Id)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudTextField @bind-Value="_filter.Account" Label="Акаунт" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSelect @bind-Value="_filter.Status" Label="Статус" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                            @foreach (var s in _statusOptions)
+                            {
+                                <MudSelectItem Value="@s">@s</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudText Typo="Typo.caption" Class="mb-1">Период (дата создания)</MudText>
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <MudDatePicker @bind-Date="_periodStart" Label="С" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                            <MudDatePicker @bind-Date="_periodEnd" Label="По" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudStack Row="true" Spacing="2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="ApplyFilter">
+                                Применить
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ResetFilter">
+                                Сбросить
+                            </MudButton>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+
+        <MudTable T="TransferAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Id</MudTh>
+                <MudTh>ExternalId</MudTh>
+                <MudTh>Агент</MudTh>
+                <MudTh>Провайдер</MudTh>
+                <MudTh>Услуга</MudTh>
+                <MudTh>Дата создания</MudTh>
+                <MudTh>Статус</MudTh>
+                <MudTh>Акаунт</MudTh>
+                <MudTh>Сумма (source)</MudTh>
+                <MudTh>Комиссия</MudTh>
+                <MudTh>Сумма зачисления</MudTh>
+                <MudTh>Комиссия провайдера</MudTh>
+                <MudTh>Курс</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Id">@context.Id.ToString("N")[..8]</MudTd>
+                <MudTd DataLabel="ExternalId">@context.ExternalId</MudTd>
+                <MudTd DataLabel="Агент">@(context.AgentName ?? context.AgentId)</MudTd>
+                <MudTd DataLabel="Провайдер">@(context.ProviderName ?? context.ProviderId ?? "—")</MudTd>
+                <MudTd DataLabel="Услуга">@(context.ServiceName ?? context.ServiceId)</MudTd>
+                <MudTd DataLabel="Дата создания">@FormatDate(context.CreatedAtUtc)</MudTd>
+                <MudTd DataLabel="Статус">@context.Status</MudTd>
+                <MudTd DataLabel="Акаунт">@context.Account</MudTd>
+                <MudTd DataLabel="Сумма">@FormatMoney(context.AmountMinor, context.AmountCurrency)</MudTd>
+                <MudTd DataLabel="Комиссия">@FormatMoney(context.FeeMinor, context.FeeCurrency)</MudTd>
+                <MudTd DataLabel="Зачисление">@FormatMoney(context.CreditedAmountMinor, context.CreditedAmountCurrency)</MudTd>
+                <MudTd DataLabel="Ком. провайдера">@FormatMoney(context.ProviderFeeMinor, context.ProviderFeeCurrency)</MudTd>
+                <MudTd DataLabel="Курс">@(context.ExchangeRate.HasValue ? context.ExchangeRate.Value.ToString("N4") : "—")</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }"
+                               RowsPerPageString="Записей на странице:" InfoFormat="{first_item}–{last_item} из {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </MudCard>
+</MudStack>
+
+@code {
+    private static readonly string[] _statusOptions = { "NEW", "PREPARED", "CONFIRMED", "SUCCESS", "TECHNICAL", "FAILED", "EXPIRED", "FRAUD" };
+
+    private bool _loading;
+    private bool _filterExpanded = true;
+    private int _filterVersion;
+    private readonly TransfersFilter _filter = new();
+    private DateTime? _periodStart;
+    private DateTime? _periodEnd;
+
+    private List<AgentAdminDto> _agents = new();
+    private List<ProviderAdminDto> _providers = new();
+    private List<ServiceAdminDto> _services = new();
+
+    private IEnumerable<ServiceAdminDto> FilteredServices =>
+        string.IsNullOrWhiteSpace(_filter.ProviderId)
+            ? _services
+            : _services.Where(s => s.ProviderId == _filter.ProviderId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReferenceDataAsync();
+    }
+
+    private async Task LoadReferenceDataAsync()
+    {
+        try
+        {
+            var agentsTask = AgentsApi.GetPagedAsync(1, 500, null);
+            var providersTask = ProvidersApi.GetPagedAsync(1, 500, null);
+            var servicesTask = ServicesApi.GetPagedAsync(1, 500, null);
+            await Task.WhenAll(agentsTask, providersTask, servicesTask);
+            _agents = (await agentsTask).Items ?? new List<AgentAdminDto>();
+            _providers = (await providersTask).Items ?? new List<ProviderAdminDto>();
+            _services = (await servicesTask).Items ?? new List<ServiceAdminDto>();
+        }
+        catch
+        {
+            _agents = new List<AgentAdminDto>();
+            _providers = new List<ProviderAdminDto>();
+            _services = new List<ServiceAdminDto>();
+        }
+    }
+
+    private static string FormatMoney(long minor, string currency)
+    {
+        if (string.IsNullOrEmpty(currency)) return minor.ToString();
+        return $"{minor / 100m:N2} {currency}";
+    }
+
+    private static string FormatDate(DateTimeOffset d) => d.UtcDateTime.ToString("yyyy-MM-dd HH:mm");
+
+    private void SyncFilterDates()
+    {
+        _filter.CreatedFrom = _periodStart.HasValue ? new DateTimeOffset(_periodStart.Value.Date, TimeSpan.Zero) : null;
+        _filter.CreatedTo = _periodEnd.HasValue ? new DateTimeOffset(_periodEnd.Value.Date, TimeSpan.Zero).AddDays(1).AddTicks(-1) : null;
+    }
+
+    private async Task<TableData<TransferAdminDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        SyncFilterDates();
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+            var result = await Api.GetPagedAsync(page, pageSize, _filter.HasAnyValue ? _filter : null, ct);
+            return new TableData<TransferAdminDto>
+            {
+                Items = result.Items ?? new List<TransferAdminDto>(),
+                TotalItems = result.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+            return new TableData<TransferAdminDto> { Items = Array.Empty<TransferAdminDto>(), TotalItems = 0 };
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyFilter()
+    {
+        SyncFilterDates();
+        _filterVersion++;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task ResetFilter()
+    {
+        _filter.Clear();
+        _periodStart = null;
+        _periodEnd = null;
+        _filterVersion++;
+        StateHasChanged();
+        Snackbar.Add("Фильтр сброшен", Severity.Info);
+        await Task.CompletedTask;
+    }
+
+}
