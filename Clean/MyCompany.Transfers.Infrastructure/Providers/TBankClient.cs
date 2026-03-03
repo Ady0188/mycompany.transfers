@@ -46,8 +46,13 @@ public sealed class TBankClient : IProviderClient
         var op = pSettings.Operations["check"];
         var replacements = request.BuildReplacements();
         var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
+
+        _logger.LogInformation($"{request.ExternalId} TBank check request: {op.PathTemplate} {body}");
+
         var response = await http.PostAsync(op.PathTemplate, new StringContent(body, Encoding.UTF8, "application/json"), ct);
         var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+        _logger.LogInformation($"{request.ExternalId} TBank check response: {responseContent} {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
             return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), response.StatusCode.ToString());
@@ -120,8 +125,13 @@ public sealed class TBankClient : IProviderClient
         var op = pSettings.Operations["confirm"];
         var replacements = request.BuildReplacements();
         var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
+
+        _logger.LogInformation($"{request.ExternalId} TBank confirm request: {op.PathTemplate} {body}");
+
         var response = await http.PostAsync(op.PathTemplate, new StringContent(body, Encoding.UTF8, "application/json"), ct);
         var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+        _logger.LogInformation($"{request.ExternalId} TBank confirm response: {responseContent} {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
             return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), response.StatusCode.ToString());
@@ -151,8 +161,13 @@ public sealed class TBankClient : IProviderClient
         var op = pSettings.Operations["state"];
         var replacements = request.BuildReplacements();
         var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
+
+        _logger.LogInformation($"{request.ExternalId} TBank state request: {op.PathTemplate} {body}");
+
         var response = await http.PostAsync(op.PathTemplate, new StringContent(body, Encoding.UTF8, "application/json"), ct);
         var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+        _logger.LogInformation($"{request.ExternalId} TBank state response: {responseContent} {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
             return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), response.StatusCode.ToString());

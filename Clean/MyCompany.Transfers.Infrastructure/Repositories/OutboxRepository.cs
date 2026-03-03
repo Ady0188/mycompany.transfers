@@ -23,4 +23,40 @@ public sealed class OutboxRepository : IOutboxRepository
         _db.Outboxes
             .Where(x => x.Status == OutboxStatus.SUCCESS)
             .ToListAsync();
+
+    public async Task<List<Outbox>> GetOtherSucceededAsync()
+    {
+        const string provider = "IBT";
+
+        var prefixes = await _db.Bins
+            .AsNoTracking()
+            .Where(b => b.Code == provider)
+            .Select(b => b.Prefix)
+            .ToListAsync();
+
+        return await _db.Outboxes
+            .AsNoTracking()
+            .Where(x => x.Status == OutboxStatus.SUCCESS &&
+                        x.ProviderId != provider &&
+                        !prefixes.Any(p => x.Account.StartsWith(p)))
+            .ToListAsync();
+    }
+
+    public async Task<List<Outbox>> GetIBTSucceededAsync()
+    {
+        const string provider = "IBT";
+
+        var prefixes = await _db.Bins
+            .AsNoTracking()
+            .Where(b => b.Code == provider)
+            .Select(b => b.Prefix)
+            .ToListAsync();
+
+        return await _db.Outboxes
+            .AsNoTracking()
+            .Where(x => x.Status == OutboxStatus.SUCCESS &&
+                        (x.ProviderId == provider ||
+                         prefixes.Any(p => x.Account.StartsWith(p))))
+            .ToListAsync();
+    }
 }

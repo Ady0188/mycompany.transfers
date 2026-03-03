@@ -153,7 +153,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                 var providerRequest = new ProviderRequest(
                     Source: msg.Source,
                     SourceAccount: string.Empty,
-                    SourceCurrency: string.Empty,
+                    SourceCurrency: msg.CurrentQuote!.Total.Currency,
                     Destination: string.Empty,
                     DestinationAccount: string.Empty,
                     Operation: operation,

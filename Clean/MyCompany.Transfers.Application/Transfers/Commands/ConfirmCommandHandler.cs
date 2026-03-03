@@ -135,9 +135,18 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
 
                 var binInfo = await _binRepository.GetByCodeAsync("IBT", ct);
 
-                var isIBTByPhone = providerId == "IBT" && transfer.Account.Length < 16;
-                var isIBTByPan = (transfer.Account.Length == 16 && binInfo.Any(x => transfer.Account.StartsWith(x.Code))) ||
-                                 (transfer.Account.Length == 16 && providerId == "IBT");
+                var acc = transfer.Account ?? string.Empty;
+                var isPan = acc.Length == 16;
+
+                var isAllowedNonIbtProvider = providerId == "IPS" || providerId == "FIMI";
+
+                var isIBTByPan =
+                    isPan &&
+                    (
+                        providerId == "IBT" ||
+                        (isAllowedNonIbtProvider && binInfo.Any(b => acc.StartsWith(b.Prefix)))
+                    );
+                var isIBTByPhone = providerId == "IBT" && acc.Length < 16;
 
                 agent = await _agentRepository.GetForUpdateSqlAsync(m.AgentId, ct);
                 if (agent is null)

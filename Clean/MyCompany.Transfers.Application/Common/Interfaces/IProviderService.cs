@@ -6,4 +6,5 @@ public interface IProviderService
 {
     Task<bool> ExistsEnabledAsync(string providerId, CancellationToken ct);
     Task<ProviderResult> SendAsync(string providerId, ProviderRequest request, CancellationToken ct);
+    //Task<ProviderResult> SendCollectionAsync(string providerId, ProviderRequest request, CancellationToken ct);
 }

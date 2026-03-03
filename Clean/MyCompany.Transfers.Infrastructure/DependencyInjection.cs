@@ -96,7 +96,12 @@ public static class DependencyInjection
 
         services.AddScoped<IProviderSender, HttpProviderSender>();
         services.AddScoped<IProviderService, ProviderService>();
-        services.AddHttpClient("base");
+        services.AddHttpClient("base").ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+            return handler;
+        });
         services.AddHttpClient("Sber").ConfigurePrimaryHttpMessageHandler(() =>
         {
             var handler = new HttpClientHandler();
@@ -104,9 +109,10 @@ public static class DependencyInjection
             return handler;
         });
 
-        //services.AddHostedService<ProviderSenderWorker>();
+        services.AddHostedService<ProviderSenderWorker>();
         //services.AddHostedService<DailyBalanceWorker>();
-        //services.AddHostedService<TransferToABSSenderWorker>();
+        //services.AddHostedService<TransferToABSIBTSenderWorker>();
+        //services.AddHostedService<TransferToABSOtherSenderWorker>();
 
         var encKey = configuration[$"{CredentialsEncryptionOptions.SectionName}:KeyBase64"];
         if (!string.IsNullOrWhiteSpace(encKey))

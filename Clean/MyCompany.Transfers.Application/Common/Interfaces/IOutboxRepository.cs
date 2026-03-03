@@ -6,6 +6,8 @@ public interface IOutboxReadRepository
 {
     Task<List<Outbox>> GetPendingsAsync();
     Task<List<Outbox>> GetSucceededAsync();
+    Task<List<Outbox>> GetIBTSucceededAsync();
+    Task<List<Outbox>> GetOtherSucceededAsync();
 }
 
 public interface IOutboxRepository : IOutboxReadRepository

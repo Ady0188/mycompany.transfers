@@ -1,20 +1,18 @@
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
-using MyCompany.Transfers.Domain.Agents;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
 
 namespace MyCompany.Transfers.Infrastructure.Workers;
 
-internal sealed class TransferToABSSenderWorker : BackgroundService
+internal sealed class TransferToABSIBTSenderWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public TransferToABSSenderWorker(IServiceScopeFactory scopeFactory)
+    public TransferToABSIBTSenderWorker(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory;
     }
@@ -32,7 +30,7 @@ internal sealed class TransferToABSSenderWorker : BackgroundService
                 var agentRepository = scope.ServiceProvider.GetRequiredService<IAgentReadRepository>();
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-                var succeeded = await outboxRepository.GetSucceededAsync();
+                var succeeded = await outboxRepository.GetIBTSucceededAsync();
 
                 foreach (var transfer in succeeded)
                 {
@@ -61,7 +59,7 @@ internal sealed class TransferToABSSenderWorker : BackgroundService
 
                         var operation = settings.JobScenario.TryGetValue(transfer.Status, out var op) ? op : null;
                         var agent = await agentRepository.GetByIdAsync(transfer.AgentId, ct);
-                        
+
                         if (operation is null)
                         {
                             providerResult = new ProviderResult(
@@ -83,7 +81,7 @@ internal sealed class TransferToABSSenderWorker : BackgroundService
                                 SourceAccount: agent.Account,
                                 SourceCurrency: transfer.Amount.Currency,
                                 Destination: destination.Name,
-                                DestinationAccount: provider.Account,
+                                DestinationAccount: string.Empty,
                                 Operation: operation,
                                 TransferId: transfer.TransferId.ToString(),
                                 NumId: transfer.NumId,
@@ -108,7 +106,7 @@ internal sealed class TransferToABSSenderWorker : BackgroundService
                                 providerRequest,
                                 ct);
                         }
-                        
+
                         var nowUtc = DateTimeOffset.UtcNow;
 
                         if (providerResult.Status == OutboxStatus.SENT_TO_ABS)
@@ -130,4 +128,3 @@ internal sealed class TransferToABSSenderWorker : BackgroundService
         }
     }
 }
-
