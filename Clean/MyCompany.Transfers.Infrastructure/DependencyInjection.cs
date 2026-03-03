@@ -80,6 +80,8 @@ public static class DependencyInjection
         services.AddScoped<IAccountDefinitionRepository>(sp =>
             new CachedAccountDefinitionRepository(sp.GetRequiredService<AccountDefinitionRepository>(), sp.GetRequiredService<ICacheService>()));
 
+        services.AddScoped<IBinRepository, BinRepository>();
+
         services.AddScoped<IProviderTokenService, ProviderTokenService>();
         services.AddSingleton<IProviderHttpHandlerCache, ProviderHttpHandlerCache>();
 

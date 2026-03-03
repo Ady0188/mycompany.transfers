@@ -1,4 +1,5 @@
 @using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
 @using MyCompany.Transfers.Admin.Client.Models
 @using MyCompany.Transfers.Admin.Client.Services
 @inject IAgentCurrencyAccessApiService Api
@@ -7,7 +8,7 @@
 
 <MudDialog>
     <DialogContent>
-        <EditForm Model="_model" OnValidSubmit="Submit">
+        <EditForm Model="_model" OnValidSubmit="HandleFormSubmit">
             <MudGrid Spacing="3">
                 <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Агент <span class="text-error">*</span></MudText></MudItem>
                 <MudItem xs="12" md="7">
@@ -19,9 +20,36 @@
                     </MudSelect>
                 </MudItem>
 
-                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Валюта <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-start" Style="min-height: 56px;">Валюты <span class="text-error">*</span></MudText></MudItem>
                 <MudItem xs="12" md="7">
-                    <MudTextField @bind-Value="_model.Currency" Variant="Variant.Outlined" Label="Код валюты (например TJS, USD)" Required="true" RequiredError="Введите код валюты" Immediate="true" MaxLength="3" Disabled="!_isCreate" />
+                    @if (_isCreate)
+                    {
+                        <MudStack Spacing="1">
+                            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1">
+                                @foreach (var c in _currencies)
+                                {
+                                    <MudChip T="string" Value="@c" Color="Color.Primary"
+                                             Variant="Variant.Filled"
+                                             OnClose="OnCurrencyChipClose">
+                                        @c
+                                    </MudChip>
+                                }
+                            </MudStack>
+                            <MudTextField @bind-Value="_currencyInput"
+                                          Variant="Variant.Outlined"
+                                          Label="Добавить валюту (ISO-код, Enter или запятая)"
+                                          HelperText="Можно указать несколько валют: после ввода нажмите Enter или запятую, каждая валюта появится отдельным элементом."
+                                          Immediate="true"
+                                          OnKeyDown="OnCurrencyKeyDown" />
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudTextField Value="_model.Currency"
+                                      Variant="Variant.Outlined"
+                                      Label="Валюта"
+                                      ReadOnly="true" />
+                    }
                 </MudItem>
 
                 <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Включён</MudText></MudItem>
@@ -56,6 +84,9 @@
     private bool _sending;
     private string? _error;
     private List<AgentAdminDto> _agents = new();
+    private List<string> _currencies = new();
+    private string _currencyInput = string.Empty;
+    private bool _suppressSubmit;
 
     protected override async Task OnInitializedAsync()
     {
@@ -66,6 +97,16 @@
             Currency = Model.Currency ?? "",
             Enabled = Model.Enabled
         };
+
+        if (_isCreate)
+        {
+            _currencies = new List<string>();
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(_model.Currency))
+                _currencies = new List<string> { _model.Currency.ToUpperInvariant() };
+        }
         try
         {
             var result = await AgentsApi.GetPagedAsync(1, 500);
@@ -79,6 +120,56 @@
 
     private void Cancel() => MudDialog.Cancel();
 
+    private void AddCurrenciesFromInput()
+    {
+        var raw = _currencyInput ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(raw))
+            return;
+
+        var tokens = raw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(c => c.ToUpperInvariant());
+
+        foreach (var token in tokens)
+        {
+            if (string.IsNullOrWhiteSpace(token)) continue;
+            if (!_currencies.Contains(token))
+                _currencies.Add(token);
+        }
+
+        _currencyInput = string.Empty;
+    }
+
+    private void RemoveCurrency(string currency)
+    {
+        _currencies.Remove(currency);
+    }
+
+    private void OnCurrencyChipClose(MudChip<string> chip)
+    {
+        if (chip?.Value != null)
+            RemoveCurrency(chip.Value);
+    }
+
+    private void OnCurrencyKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || e.Key == ",")
+        {
+            AddCurrenciesFromInput();
+            _suppressSubmit = true; // Enter не должен отправлять форму
+        }
+    }
+
+    private async Task HandleFormSubmit()
+    {
+        if (_suppressSubmit)
+        {
+            _suppressSubmit = false;
+            return;
+        }
+        await Submit();
+    }
+
     private async Task Submit()
     {
         _error = null;
@@ -86,16 +177,64 @@
         StateHasChanged();
         try
         {
-            var (success, err) = _isCreate
-                ? await Api.CreateAsync(_model)
-                : await Api.UpdateAsync(_model.AgentId, _model.Currency, _model);
-            if (success)
+            if (_isCreate)
             {
-                Snackbar.Add(_isCreate ? "Доступ создан." : "Доступ обновлён.", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(true));
+                // добавить то, что в поле ввода, перед сохранением
+                AddCurrenciesFromInput();
+
+                if (_currencies.Count == 0)
+                {
+                    _error = "Введите хотя бы одну валюту.";
+                    return;
+                }
+
+                var codes = _currencies
+                    .Select(c => c.ToUpperInvariant())
+                    .Distinct()
+                    .ToList();
+
+                var errors = new List<string>();
+
+                foreach (var code in codes)
+                {
+                    var dto = new AgentCurrencyAccessAdminDto
+                    {
+                        AgentId = _model.AgentId,
+                        Currency = code,
+                        Enabled = _model.Enabled
+                    };
+
+                    var (success, err) = await Api.CreateAsync(dto);
+                    if (!success)
+                        errors.Add($"{code}: {err ?? "Ошибка создания доступа"}");
+                }
+
+                if (errors.Count == 0)
+                {
+                    Snackbar.Add($"Доступы по валютам {string.Join(", ", codes)} созданы.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else if (errors.Count == codes.Count)
+                {
+                    _error = string.Join("; ", errors);
+                }
+                else
+                {
+                    Snackbar.Add($"Часть доступов создана, но есть ошибки: {string.Join("; ", errors)}", Severity.Warning);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
             }
             else
-                _error = err ?? "Ошибка сохранения";
+            {
+                var (success, err) = await Api.UpdateAsync(_model.AgentId, _model.Currency, _model);
+                if (success)
+                {
+                    Snackbar.Add("Доступ обновлён.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                    _error = err ?? "Ошибка сохранения";
+            }
         }
         finally
         {

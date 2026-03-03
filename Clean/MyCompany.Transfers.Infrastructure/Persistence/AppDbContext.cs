@@ -12,6 +12,7 @@ using MyCompany.Transfers.Domain.Services;
 using MyCompany.Transfers.Domain.Transfers;
 using System.Text.Json;
 using MyCompany.Transfers.Domain.Accounts.Enums;
+using MyCompany.Transfers.Domain.Bins;
 
 namespace MyCompany.Transfers.Infrastructure.Persistence;
 
@@ -32,6 +33,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<AgentCurrencyAccess> AgentCurrencies => Set<AgentCurrencyAccess>();
     public DbSet<AgentServiceAccess> AgentServices => Set<AgentServiceAccess>();
     public DbSet<FxRate> FxRates => Set<FxRate>();
+    public DbSet<Bin> Bins => Set<Bin>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -262,6 +264,18 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.Source).HasMaxLength(32).HasDefaultValue("manual");
             eb.Property(x => x.IsActive).HasDefaultValue(true);
             eb.HasIndex(x => new { x.AgentId, x.BaseCurrency, x.QuoteCurrency }).IsUnique();
+        });
+
+        b.Entity<Bin>(eb =>
+        {
+            eb.HasKey(x => x.Id);
+            eb.Property(x => x.Prefix).HasMaxLength(32).IsRequired();
+            eb.Property(x => x.Len).IsRequired();
+            eb.Property(x => x.Code).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.Name).HasMaxLength(256).IsRequired();
+            eb.HasIndex(x => x.Prefix).IsUnique();
+            eb.HasIndex(x => x.Code);
+            eb.ToTable("Bins");
         });
 
         b.Entity<AccountDefinition>(eb =>
