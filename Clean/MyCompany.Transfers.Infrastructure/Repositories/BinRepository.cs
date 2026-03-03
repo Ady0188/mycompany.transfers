@@ -17,6 +17,9 @@ public sealed class BinRepository : IBinRepository
     public Task<Bin?> GetForUpdateAsync(Guid id, CancellationToken ct) =>
         _db.Bins.FirstOrDefaultAsync(b => b.Id == id, ct);
 
+    public Task<IReadOnlyList<Bin>> GetByCodeAsync(string code, CancellationToken ct) =>
+        _db.Bins.AsNoTracking().Where(x => x.Code == code.ToUpper()).OrderBy(b => b.Prefix).ToListAsync(ct).ContinueWith(t => (IReadOnlyList<Bin>)t.Result, ct);
+
     public Task<IReadOnlyList<Bin>> GetAllForAdminAsync(CancellationToken ct) =>
         _db.Bins.AsNoTracking().OrderBy(b => b.Prefix).ToListAsync(ct).ContinueWith(t => (IReadOnlyList<Bin>)t.Result, ct);
 

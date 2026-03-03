@@ -30,7 +30,6 @@
 
         <MudTable T="BinAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
             <HeaderContent>
-                <MudTh>Id</MudTh>
                 <MudTh>Префикс (бин)</MudTh>
                 <MudTh>Длина</MudTh>
                 <MudTh>Код</MudTh>
@@ -38,7 +37,6 @@
                 <MudTh Style="width: 120px;">Действия</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Id">@context.Id.ToString("N")</MudTd>
                 <MudTd DataLabel="Префикс">@context.Prefix</MudTd>
                 <MudTd DataLabel="Длина">@context.Len</MudTd>
                 <MudTd DataLabel="Код">@context.Code</MudTd>

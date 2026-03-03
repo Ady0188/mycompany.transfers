@@ -21,6 +21,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
     private readonly IProviderService _providerService;
     private readonly IAgentReadRepository _agentRepository;
     private readonly IAgentBalanceHistoryRepository _balanceHistory;
+    private readonly IBinRepository _binRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _clock;
     private readonly ILogger<ConfirmCommandHandler> _logger;
@@ -35,7 +36,8 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
         IProviderService providerService,
         IAgentReadRepository agentRepository,
         IAgentBalanceHistoryRepository balanceHistory,
-        ILogger<ConfirmCommandHandler> logger)
+        ILogger<ConfirmCommandHandler> logger,
+        IBinRepository binRepository)
     {
         _transfers = transfers;
         _services = services;
@@ -47,6 +49,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
         _agentRepository = agentRepository;
         _balanceHistory = balanceHistory;
         _logger = logger;
+        _binRepository = binRepository;
     }
 
     public async Task<ErrorOr<ConfirmResponseDto>> Handle(ConfirmCommand m, CancellationToken ct)
@@ -130,6 +133,12 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
 
                 isProviderOnline = provider.IsOnline;
 
+                var binInfo = await _binRepository.GetByCodeAsync("IBT", ct);
+
+                var isIBTByPhone = providerId == "IBT" && transfer.Account.Length < 16;
+                var isIBTByPan = (transfer.Account.Length == 16 && binInfo.Any(x => transfer.Account.StartsWith(x.Code))) ||
+                                 (transfer.Account.Length == 16 && providerId == "IBT");
+
                 agent = await _agentRepository.GetForUpdateSqlAsync(m.AgentId, ct);
                 if (agent is null)
                 {
@@ -165,7 +174,6 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                 }
 
                 transfer.MarkConfirmed(nowUtc);
-                response = transfer.ToConfirmResponseDto(agent);
 
                 providerReq = new ProviderRequest(Source: agent.Id,
                     SourceAccount: string.Empty,
@@ -192,6 +200,15 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                     TransferDateTime: transfer.CreatedAtUtc);
 
                 outbox = Outbox.Create(transfer, service, agent.Id);
+
+                if (isIBTByPan || isIBTByPhone)
+                {
+                    transfer.MarkCompleted(_clock.GetUtcNow(), TransferStatus.SUCCESS);
+                    outbox.MarkCompleted(_clock.GetUtcNow(), OutboxStatus.SUCCESS);
+                }
+
+                response = transfer.ToConfirmResponseDto(agent);
+
                 return true;
             }, ct);
 
