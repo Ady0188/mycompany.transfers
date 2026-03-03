@@ -1,4 +1,4 @@
-﻿namespace MyCompany.Transfers.Application.Common.Helpers;
+namespace MyCompany.Transfers.Application.Common.Helpers;
 
 public static class ErrorCodes
 {

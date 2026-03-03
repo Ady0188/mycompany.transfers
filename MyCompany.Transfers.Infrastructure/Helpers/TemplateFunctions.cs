@@ -1,9 +1,6 @@
-﻿using System;
 using System.Globalization;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace MyCompany.Transfers.Infrastructure.Helpers;
 
@@ -50,11 +47,9 @@ public static class TemplateFunctions
 
         var sepToken = (args.Count > 2 ? args[2] : "dot").Trim();
 
-        // делаем decimal = minor / 10^scale
         decimal value = minor;
         for (int i = 0; i < scale; i++) value /= 10m;
 
-        // Формируем строку в invariant ("."), затем при необходимости меняем на ","
         var s = value.ToString($"F{scale}", CultureInfo.InvariantCulture);
 
         if (sepToken.Equals("comma", StringComparison.OrdinalIgnoreCase) || sepToken == ",")
@@ -179,38 +174,29 @@ public static class TemplateFunctions
     private static string GetAppHashCode(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
         var data = ResolveArg(args.ElementAtOrDefault(0), values);
-
         return Math.Abs(data.GetHashCode()).ToString();
     }
 
     private static string IPSEncryptData(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
-        try
-        {
-            var data = ResolveArg(args.ElementAtOrDefault(0), values);
+        var data = ResolveArg(args.ElementAtOrDefault(0), values);
 
-            if (additionalParams.TryGetValue("publicKeyPath", out var publicKeyPath) == false)
-                throw new ArgumentException("PublicKeyPath parameter is required for IPSEncryptData function.");
+        if (!additionalParams.TryGetValue("publicKeyPath", out var publicKeyPath))
+            throw new ArgumentException("PublicKeyPath parameter is required for IPSEncryptData function.");
 
-            string cryptoPackage = GenerateCryptoPackage(data, DateTime.UtcNow.ToString("yyyyMM"));
-            byte[] messageBytes = HexStringToByteArray(cryptoPackage);
-            byte[] publicKeyBytes = GetPublicKey(publicKeyPath);
-            using RSA rsa = RSA.Create();
-            rsa.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
+        string cryptoPackage = GenerateCryptoPackage(data, DateTime.UtcNow.ToString("yyyyMM"));
+        byte[] messageBytes = HexStringToByteArray(cryptoPackage);
+        byte[] publicKeyBytes = GetPublicKey(publicKeyPath);
+        using RSA rsa = RSA.Create();
+        rsa.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
 
-            byte[] encrypted = rsa.Encrypt(messageBytes, RSAEncryptionPadding.Pkcs1);
+        byte[] encrypted = rsa.Encrypt(messageBytes, RSAEncryptionPadding.Pkcs1);
 
-            byte[] result = new byte[encrypted.Length + 1];
-            result[0] = 0x11;
-            Buffer.BlockCopy(encrypted, 0, result, 1, encrypted.Length);
+        byte[] result = new byte[encrypted.Length + 1];
+        result[0] = 0x11;
+        Buffer.BlockCopy(encrypted, 0, result, 1, encrypted.Length);
 
-            return Convert.ToBase64String(result);
-        }
-        catch (Exception ex)
-        {
-
-            throw;
-        }
+        return Convert.ToBase64String(result);
     }
 
     private static string GenerateCryptoPackage(string pan, string? expDate)
@@ -219,7 +205,6 @@ public static class TemplateFunctions
         string panFormat = "0110" + pan;
         string expDateFormat = string.IsNullOrEmpty(expDate) ? "" : "0206" + expDate;
         string dateTimeFormat = "040E" + DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-
         return dataFormat + panFormat + expDateFormat + dateTimeFormat;
     }
 
@@ -228,9 +213,7 @@ public static class TemplateFunctions
         int len = hex.Length;
         byte[] result = new byte[len / 2];
         for (int i = 0; i < len; i += 2)
-        {
             result[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
-        }
         return result;
     }
 
@@ -243,77 +226,61 @@ public static class TemplateFunctions
 
     private static byte[] GetRsaPublicKeyFromBase64(string base64)
     {
-        // Clean up PEM format if exists
         base64 = base64
             .Replace("-----BEGIN PUBLIC KEY-----", "")
             .Replace("-----END PUBLIC KEY-----", "")
             .Replace("\r", "")
             .Replace("\n", "")
             .Trim();
-
         return Convert.FromBase64String(base64);
     }
 
     private static string EncryptData(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
-        // args[0] = что шифруем
         var data = ResolveArg(args.ElementAtOrDefault(0), values);
-        // format может быть, например "Format1" или "AES" — если нужно
-        return data;//Crypto.EncryptData(data, format); // твоя реализация
+        return data;
     }
 
     private static string GetHash(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
-        // пример: [@GetHash:SHA256,[TransferId]]
         var algo = args.ElementAtOrDefault(0) ?? "SHA256";
         var data = ResolveArg(args.ElementAtOrDefault(1), values);
-        return data;//Crypto.GetHash(data, algo);
+        return data;
     }
 
     private static string ComputeSha256Hash(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
         var data = ResolveArg(args.ElementAtOrDefault(0), values);
-        using (SHA256 sha256Hash = SHA256.Create())
-        {
-            // ComputeHash - returns byte array  
-            byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(data));
-
-            // Convert byte array to a string   
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                builder.Append(bytes[i].ToString("x2"));
-            }
-            return builder.ToString();
-        }
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(data));
+        var builder = new StringBuilder(bytes.Length * 2);
+        foreach (var b in bytes)
+            builder.Append(b.ToString("x2"));
+        return builder.ToString();
     }
 
     private static string GetTBankSignature(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
-        // пример: [@GetTBankSignature:input,certPath]
         var data = ResolveArg(args.ElementAtOrDefault(0), values);
         var certPath = args.ElementAtOrDefault(1) ?? string.Empty;
 
         if (string.IsNullOrEmpty(data))
             return string.Empty;
-        else if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
+        if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
             return string.Empty;
 
         string pem = File.ReadAllText(certPath);
-        RSA _rsa = RSA.Create();
-        _rsa.ImportFromPem(pem);
+        using RSA rsa = RSA.Create();
+        rsa.ImportFromPem(pem);
 
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(data));
-
-        return Convert.ToBase64String(_rsa.SignHash(hash, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        return Convert.ToBase64String(rsa.SignHash(hash, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
     }
 
     private static string Signature(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
     {
-        // пример: [@Signature:HMACSHA256,[Body]]
         var algo = args.ElementAtOrDefault(0) ?? "HMACSHA256";
         var data = ResolveArg(args.ElementAtOrDefault(1), values);
-        return data;//Crypto.Signature(data, algo);
+        return data;
     }
 
     private static string GetFIMITranCode(IReadOnlyDictionary<string, object?> values, string? format, IReadOnlyList<string> args, Dictionary<string, string> additionalParams)
@@ -321,25 +288,20 @@ public static class TemplateFunctions
         var data = ResolveArg(args.ElementAtOrDefault(0), values);
         string tranCode = "133";
         if (data.StartsWith("505827042") || data.StartsWith("505827043") || data.StartsWith("505827068"))
-        {
             tranCode = "140";
-        }
-
-        return tranCode; 
+        return tranCode;
     }
 
     private static string ResolveArg(string? raw, IReadOnlyDictionary<string, object?> values)
     {
         if (string.IsNullOrEmpty(raw)) return string.Empty;
 
-        // если аргумент вида [Key] — подставляем значение
         if (raw.StartsWith("[") && raw.EndsWith("]"))
         {
             var key = raw.Substring(1, raw.Length - 2);
             return values.TryGetValue(key, out var v) && v is not null ? v.ToString()! : string.Empty;
         }
 
-        // иначе это литерал
         return raw;
     }
 }

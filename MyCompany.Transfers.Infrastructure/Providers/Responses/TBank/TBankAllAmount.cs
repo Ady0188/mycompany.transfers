@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace MyCompany.Transfers.Infrastructure.Providers.Responses.TBank;
 
@@ -8,5 +8,5 @@ public class TBankAllAmount
     public decimal? Amount { get; set; }
 
     [JsonPropertyName("currency")]
-    public string Currency { get; set; }
+    public string? Currency { get; set; }
 }

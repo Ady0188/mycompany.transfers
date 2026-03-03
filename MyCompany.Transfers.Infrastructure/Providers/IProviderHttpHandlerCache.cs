@@ -1,4 +1,4 @@
-﻿using MyCompany.Transfers.Domain.Providers;
+using MyCompany.Transfers.Domain.Providers;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 

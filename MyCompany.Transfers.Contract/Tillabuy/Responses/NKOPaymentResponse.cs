@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 
 namespace MyCompany.Transfers.Contract.Tillabuy.Responses;
 
@@ -6,36 +6,34 @@ namespace MyCompany.Transfers.Contract.Tillabuy.Responses;
 public class NKOPaymentResponse
 {
     [XmlElement(ElementName = "Result")]
-    public string Result { get; set; }
+    public string Result { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "ErrCode")]
     public int ErrCode { get; set; }
 
     [XmlElement(ElementName = "PaymExtId")]
-    public string PaymExtId { get; set; }
+    public string PaymExtId { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "RequestId")]
-    public string RequestId { get; set; }
+    public string RequestId { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "Description")]
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "TechInfo")]
-    public string TechInfo { get; set; }
+    public string TechInfo { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "PaymNumb")]
-    public string PaymNumb { get; set; }
+    public string PaymNumb { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "BillRegId")]
-    public string BillRegId { get; set; }
+    public string BillRegId { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "PaymDate")]
-    public string PaymDate { get; set; }
+    public string PaymDate { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "Balance")]
     public decimal Balance { get; set; }
-
-
 
     [XmlElement(ElementName = "ExchangeRate")]
     public decimal? ExchangeRate { get; set; }
@@ -44,7 +42,7 @@ public class NKOPaymentResponse
     public bool ExchangeRateSpecified => ExchangeRate.HasValue;
 
     [XmlElement(ElementName = "Currency")]
-    public string Currency { get; set; }
+    public string Currency { get; set; } = string.Empty;
 
     [XmlIgnore]
     public bool CurrencySpecified => !string.IsNullOrWhiteSpace(Currency);
@@ -54,9 +52,4 @@ public class NKOPaymentResponse
 
     [XmlIgnore]
     public bool CreditAmountSpecified => CreditAmount.HasValue;
-
-
-
-
-    public string StringResult { get; set; }
 }

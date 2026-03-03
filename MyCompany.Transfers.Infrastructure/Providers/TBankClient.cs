@@ -1,89 +1,67 @@
-﻿using MyCompany.Transfers.Application.Common.Interfaces;
+using System.Text;
+using Microsoft.Extensions.Logging;
+using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
 using MyCompany.Transfers.Infrastructure.Providers.Responses.TBank;
-using Microsoft.Extensions.DependencyInjection;
-using NLog;
-using System.Text;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 
-internal class TBankClient : IProviderClient
+public sealed class TBankClient : IProviderClient
 {
     public string ProviderId => "TBank";
-    private Logger _logger = LogManager.GetCurrentClassLogger();
-
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _httpFactory;
-    public TBankClient(IServiceScopeFactory scopeFactory, IHttpClientFactory httpFactory)
+    private readonly ILogger<TBankClient> _logger;
+
+    public TBankClient(IHttpClientFactory httpFactory, ILogger<TBankClient> logger)
     {
-        _scopeFactory = scopeFactory;
         _httpFactory = httpFactory;
+        _logger = logger;
     }
 
     public async Task<ProviderResult> SendAsync(Provider provider, ProviderRequest request, CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var providerHttpHandlerCache = scope.ServiceProvider.GetRequiredService<IProviderHttpHandlerCache>();
-
-        var settings = provider.SettingsJson.Deserialize<ProviderSettings>()
-                       ?? new ProviderSettings();
-
-        if (!settings.Operations.TryGetValue(request.Operation, out var op) && request.Operation.ToLower() != "prepare")
-        {
-            _logger.Warn($"Operation '{request.Operation}' not configured for provider '{provider.Id}'");
-            return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
-                $"Operation '{request.Operation}' not configured for provider '{provider.Id}'");
-        }
-
+        var settings = provider.SettingsJson.Deserialize<ProviderSettings>() ?? new ProviderSettings();
         var http = _httpFactory.CreateClient("base");
         http.BaseAddress = new Uri(provider.BaseUrl);
         http.Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30);
-
         http.DefaultRequestHeaders.Add("serviceName", "tbank");
 
-        var result = new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), null);
-        if (request.Operation.ToLower() == "check" || request.Operation.ToLower() == "prepare")
-            result = await CheckAsync(http, request, settings, ct);
-        if (request.Operation.ToLower() == "confirm")
-            result = await ConfirmAsync(http, request, settings, ct);
-        if (request.Operation.ToLower() == "state")
-            result = await StateAsync(http, request, settings, ct);
+        var opName = request.Operation.ToLowerInvariant();
+        if (opName is "check" or "prepare")
+            return await CheckAsync(http, request, settings, ct);
+        if (opName == "confirm")
+            return await ConfirmAsync(http, request, settings, ct);
+        if (opName == "state")
+            return await StateAsync(http, request, settings, ct);
 
-        return result;
+        return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
+            $"Operation '{request.Operation}' not configured");
     }
 
-    private async Task<ProviderResult> CheckAsync(
-        HttpClient http,
-        ProviderRequest request,
-        ProviderSettings pSettings,
-        CancellationToken ct)
+    private async Task<ProviderResult> CheckAsync(HttpClient http, ProviderRequest request, ProviderSettings pSettings, CancellationToken ct)
     {
-        var settings = pSettings.Operations["check"];
-
+        var op = pSettings.Operations["check"];
         var replacements = request.BuildReplacements();
-        var body = settings.BodyTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
+        var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
 
-        StringContent content = new StringContent(body, Encoding.UTF8, "application/json");
+        _logger.LogInformation($"{request.ExternalId} TBank check request: {op.PathTemplate} {body}");
 
-        var response = await http.PostAsync(settings.PathTemplate, content);
+        var response = await http.PostAsync(op.PathTemplate, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+        var responseContent = await response.Content.ReadAsStringAsync(ct);
 
-        _logger.Info($"Response Status: {response.StatusCode}");
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-        _logger.Info($"Response: {responseContent}");
+        _logger.LogInformation($"{request.ExternalId} TBank check response: {responseContent} {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
             return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), response.StatusCode.ToString());
 
         var result = responseContent.Deserialize<TBankCheckResponse>();
-        if (result == null)
-            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response from provider");
+        if (result is null)
+            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response");
 
         var state = result.TransferState?.State;
-
         var status = state switch
         {
             "CHECKED" => OutboxStatus.SENDING,
@@ -92,132 +70,113 @@ internal class TBankClient : IProviderClient
         };
 
         var dict = new Dictionary<string, string>();
-
         if (status == OutboxStatus.FAILED)
         {
-            dict["errorCode"] = state;
-
+            dict["errorCode"] = state ?? "";
             return new ProviderResult(status, dict, result.TransferState?.ErrorMessage ?? "Empty message");
         }
-
-        dict["platform_reference_number"] = result.PlatformReferenceNumber!;
-        dict["check_date"] = result.CheckDate!;
-
-        var settlementAmount = result.SettlementAmount;
-        dict["settlement_amount"] = settlementAmount is null ? "" : settlementAmount.Amount.ToString()!.Replace(",", ".");
-        dict["settlement_currency"] = settlementAmount is null ? "RUB" : settlementAmount.Currency;
-
-        var receivingAmount = result.ReceivingAmount;
-        dict["receiving_amount"] = receivingAmount is null ? "" : receivingAmount.Amount.ToString()!.Replace(",", ".");
-        dict["receiving_currency"] = receivingAmount is null ? "RUB" : receivingAmount.Currency;
-
+        dict["platform_reference_number"] = result.PlatformReferenceNumber ?? "";
+        dict["check_date"] = result.CheckDate ?? "";
+        if (result.SettlementAmount is not null)
+        {
+            dict["settlement_amount"] = result.SettlementAmount.Amount?.ToString()?.Replace(",", ".") ?? "";
+            dict["settlement_currency"] = result.SettlementAmount.Currency ?? "RUB";
+        }
+        if (result.ReceivingAmount is not null)
+        {
+            dict["receiving_amount"] = result.ReceivingAmount.Amount?.ToString()?.Replace(",", ".") ?? "";
+            dict["receiving_currency"] = result.ReceivingAmount.Currency ?? "RUB";
+        }
         if (result.FeeAmount is not null)
         {
-            var platformFee = result.FeeAmount.FirstOrDefault(x => x.Type is not null && x.Type.Equals("PLATFORM", StringComparison.OrdinalIgnoreCase));
-
+            var platformFee = result.FeeAmount.FirstOrDefault(x => string.Equals(x.Type, "PLATFORM", StringComparison.OrdinalIgnoreCase));
             if (platformFee is not null)
             {
-                dict["platform_fee_amount"] = platformFee.Amount.ToString().Replace(",", ".")!;
-                dict["platform_fee_currency"] = platformFee.Currency!;
+                dict["platform_fee_amount"] = platformFee.Amount.ToString().Replace(",", ".");
+                dict["platform_fee_currency"] = platformFee.Currency ?? "";
             }
-
-            var receiverFee = result.FeeAmount.FirstOrDefault(x => x.Type is not null && x.Type.Equals("RECEIVER", StringComparison.OrdinalIgnoreCase));
-
+            var receiverFee = result.FeeAmount.FirstOrDefault(x => string.Equals(x.Type, "RECEIVER", StringComparison.OrdinalIgnoreCase));
             if (receiverFee is not null)
             {
-                dict["receiver_fee_amount"] = receiverFee.Amount.ToString().Replace(",", ".")!;
-                dict["receiver_fee_currency"] = receiverFee.Currency!;
+                dict["receiver_fee_amount"] = receiverFee.Amount.ToString().Replace(",", ".");
+                dict["receiver_fee_currency"] = receiverFee.Currency ?? "";
             }
         }
-
         if (result.ConversionRateBuy is not null)
         {
             dict["conversion_orig_curr"] = result.ConversionRateBuy.OriginatorCurrency;
             dict["conversion_settl_curr"] = result.ConversionRateBuy.SettlementCurrency;
-            dict["conversion_rate"] = result.ConversionRateBuy.Rate.ToString().Replace(",", ".")!;
-            dict["conversion_base_rate"] = result.ConversionRateBuy.BaseRate.ToString().Replace(",", ".")!;
+            dict["conversion_rate"] = result.ConversionRateBuy.Rate.ToString().Replace(",", ".");
+            dict["conversion_base_rate"] = result.ConversionRateBuy.BaseRate.ToString().Replace(",", ".");
+        }
+        else
+        {
+            dict["conversion_orig_curr"] = "RUB";
+            dict["conversion_settl_curr"] = "RUB";
+            dict["conversion_rate"] = "1";
+            dict["conversion_base_rate"] = "1";
         }
 
         return new ProviderResult(status, dict, "OK");
     }
 
-    private async Task<ProviderResult> ConfirmAsync(
-        HttpClient http,
-        ProviderRequest request,
-        ProviderSettings pSettings,
-        CancellationToken ct)
+    private async Task<ProviderResult> ConfirmAsync(HttpClient http, ProviderRequest request, ProviderSettings pSettings, CancellationToken ct)
     {
-        var settings = pSettings.Operations["confirm"];
-
+        var op = pSettings.Operations["confirm"];
         var replacements = request.BuildReplacements();
-        var body = settings.BodyTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
+        var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
 
-        StringContent content = new StringContent(body, Encoding.UTF8, "application/json");
+        _logger.LogInformation($"{request.ExternalId} TBank confirm request: {op.PathTemplate} {body}");
 
-        var response = await http.PostAsync(settings.PathTemplate, content);
+        var response = await http.PostAsync(op.PathTemplate, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+        var responseContent = await response.Content.ReadAsStringAsync(ct);
 
-        _logger.Info($"Response Status: {response.StatusCode}");
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-        _logger.Info($"Response: {responseContent}");
+        _logger.LogInformation($"{request.ExternalId} TBank confirm response: {responseContent} {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
             return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), response.StatusCode.ToString());
 
         var result = responseContent.Deserialize<TBankCheckResponse>();
-        if (result == null)
-            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response from provider");
+        if (result is null)
+            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response");
 
         var state = result.TransferState?.State;
-
         var status = state switch
         {
             "CONFIRMED" => OutboxStatus.SUCCESS,
             "CONFIRM_PENDING" => OutboxStatus.STATUS,
             _ => OutboxStatus.FAILED
         };
-        
         var dict = new Dictionary<string, string>();
-
         if (status == OutboxStatus.FAILED)
         {
-            dict["errorCode"] = state;
-
+            dict["errorCode"] = state ?? "";
             return new ProviderResult(status, dict, result.TransferState?.ErrorMessage ?? "Empty message");
         }
-
         return new ProviderResult(status, dict, "OK");
     }
 
-    private async Task<ProviderResult> StateAsync(
-        HttpClient http,
-        ProviderRequest request,
-        ProviderSettings pSettings,
-        CancellationToken ct)
+    private async Task<ProviderResult> StateAsync(HttpClient http, ProviderRequest request, ProviderSettings pSettings, CancellationToken ct)
     {
-        var settings = pSettings.Operations["state"];
-
+        var op = pSettings.Operations["state"];
         var replacements = request.BuildReplacements();
-        var body = settings.BodyTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
+        var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
 
-        StringContent content = new StringContent(body, Encoding.UTF8, "application/json");
+        _logger.LogInformation($"{request.ExternalId} TBank state request: {op.PathTemplate} {body}");
 
-        var response = await http.PostAsync(settings.PathTemplate, content);
+        var response = await http.PostAsync(op.PathTemplate, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+        var responseContent = await response.Content.ReadAsStringAsync(ct);
 
-        _logger.Info($"Response Status: {response.StatusCode}");
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-        _logger.Info($"Response: {responseContent}");
+        _logger.LogInformation($"{request.ExternalId} TBank state response: {responseContent} {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
             return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), response.StatusCode.ToString());
 
         var result = responseContent.Deserialize<TBankStateResponse>();
-        if (result == null)
-            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response from provider");
+        if (result is null)
+            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response");
 
         var state = result.TransferState?.State;
-
         var status = state switch
         {
             "CHECKED" => OutboxStatus.SENDING,
@@ -226,16 +185,12 @@ internal class TBankClient : IProviderClient
             "CONFIRM_PENDING" => OutboxStatus.STATUS,
             _ => OutboxStatus.FAILED
         };
-
         var dict = new Dictionary<string, string>();
-
         if (status == OutboxStatus.FAILED)
         {
-            dict["errorCode"] = state;
-
+            dict["errorCode"] = state ?? "";
             return new ProviderResult(status, dict, result.TransferState?.ErrorMessage ?? "Empty message");
         }
-
         return new ProviderResult(status, dict, "OK");
     }
 }

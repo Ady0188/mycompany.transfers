@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 
 namespace MyCompany.Transfers.Infrastructure.Providers.Responses.Sber;
 
@@ -8,5 +8,5 @@ public class Error
     public int Code { get; set; }
 
     [XmlElement("description")]
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
 }

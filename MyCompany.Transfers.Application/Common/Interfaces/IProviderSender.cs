@@ -1,4 +1,4 @@
-﻿using MyCompany.Transfers.Application.Common.Providers;
+using MyCompany.Transfers.Application.Common.Providers;
 using MyCompany.Transfers.Domain.Providers;
 
 namespace MyCompany.Transfers.Application.Common.Interfaces;

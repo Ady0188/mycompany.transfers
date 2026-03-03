@@ -1,39 +1,35 @@
-﻿using MyCompany.Transfers.Application.Common.Interfaces;
+using Microsoft.Extensions.Logging;
+using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
-using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
-using NLog;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 
 public sealed class ProviderService : IProviderService
 {
-    private Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IProviderRepository _repo;
     private readonly IProviderSender _sender;
     private readonly IEnumerable<IProviderClient> _clients;
+    private readonly ILogger<ProviderService> _logger;
 
     public ProviderService(
         IProviderRepository repo,
         IProviderSender sender,
-        IEnumerable<IProviderClient> clients)
+        IEnumerable<IProviderClient> clients,
+        ILogger<ProviderService> logger)
     {
         _repo = repo;
         _sender = sender;
         _clients = clients;
+        _logger = logger;
     }
 
     public async Task<bool> ExistsEnabledAsync(string providerId, CancellationToken ct)
     {
-        var client = _clients.FirstOrDefault(
-            c => string.Equals(c.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
-
-        if (client != null)
+        var client = _clients.FirstOrDefault(c => string.Equals(c.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
+        if (client is not null)
             return true;
-
-        var provider = await _repo.GetAsync(providerId, ct);
-        
-        return provider is not null && provider.IsEnabled;
+        return await _repo.ExistsEnabledAsync(providerId, ct);
     }
 
     public async Task<ProviderResult> SendAsync(string providerId, ProviderRequest request, CancellationToken ct)
@@ -44,9 +40,7 @@ public sealed class ProviderService : IProviderService
             if (provider is null)
                 return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), $"Unknown provider '{providerId}'");
 
-            var client = _clients.FirstOrDefault(
-                c => string.Equals(c.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
-
+            var client = _clients.FirstOrDefault(c => string.Equals(c.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
             if (client is not null)
                 return await client.SendAsync(provider, request, ct);
 
@@ -54,7 +48,7 @@ public sealed class ProviderService : IProviderService
         }
         catch (Exception ex)
         {
-            _logger.Error($"{ex}");
+            _logger.LogError(ex, "ProviderService SendAsync failed for {ProviderId}", providerId);
             return new ProviderResult(OutboxStatus.TECHNICAL, new Dictionary<string, string>(), ex.Message);
         }
     }

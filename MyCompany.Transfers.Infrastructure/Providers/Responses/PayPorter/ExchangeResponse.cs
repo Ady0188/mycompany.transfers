@@ -1,12 +1,12 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace MyCompany.Transfers.Infrastructure.Providers.Responses.PayPorter;
 
 public class ExchangeResponse
 {
     [JsonPropertyName("header")]
-    public Header Header { get; set; }
+    public Header Header { get; set; } = null!;
 
     [JsonPropertyName("responseObject")]
-    public ExchangeResponseObject ResponseObject { get; set; }
+    public ExchangeResponseObject ResponseObject { get; set; } = null!;
 }

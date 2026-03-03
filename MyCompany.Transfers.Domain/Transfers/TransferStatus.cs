@@ -1,4 +1,4 @@
-﻿namespace MyCompany.Transfers.Domain.Transfers;
+namespace MyCompany.Transfers.Domain.Transfers;
 
 public enum TransferStatus
 {
@@ -23,5 +23,7 @@ public enum OutboxStatus
     EXPIRED,
     FRAUD,
     NORESPONSE,
-    SETTING
+    SETTING,
+    NOT_FOUND,
+    SENT_TO_ABS
 }

@@ -1,4 +1,4 @@
-﻿using MyCompany.Transfers.Domain.Accounts.Enums;
+using MyCompany.Transfers.Domain.Accounts.Enums;
 using MyCompany.Transfers.Domain.Common;
 using System.Text.RegularExpressions;
 
@@ -6,7 +6,7 @@ namespace MyCompany.Transfers.Domain.Accounts;
 
 public static class AccountRules
 {
-    public static string Normalize(string account, AccountDefinition def)
+    public static string Normalize(string? account, AccountDefinition def)
     {
         if (account is null) return string.Empty;
         var v = account;

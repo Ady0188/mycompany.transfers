@@ -1,30 +1,23 @@
-﻿using ErrorOr;
+using ErrorOr;
+using MediatR;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Domain.Services;
-using MediatR;
 
 namespace MyCompany.Transfers.Application.Services.Queries;
 
-public record GetServiceByIdQuery(string serviceId) : IRequest<ErrorOr<(Service Service, bool IsByPan)>>;
-public class GetServiceByIdQueryHandler : IRequestHandler<GetServiceByIdQuery, ErrorOr<(Service Service, bool IsByPan)>>
+public sealed record GetServiceByIdQuery(string ServiceId) : IRequest<ErrorOr<(Service Service, bool IsByPan)>>;
+
+public sealed class GetServiceByIdQueryHandler : IRequestHandler<GetServiceByIdQuery, ErrorOr<(Service Service, bool IsByPan)>>
 {
-    private readonly IServiceRepository _serviceRepository;
+    private readonly IServiceRepository _services;
 
-    public GetServiceByIdQueryHandler(IServiceRepository serviceRepository)
+    public GetServiceByIdQueryHandler(IServiceRepository services) => _services = services;
+
+    public async Task<ErrorOr<(Service Service, bool IsByPan)>> Handle(GetServiceByIdQuery request, CancellationToken ct)
     {
-        _serviceRepository = serviceRepository;
-    }
-
-    public async Task<ErrorOr<(Service Service, bool IsByPan)>> Handle(GetServiceByIdQuery request, CancellationToken cancellationToken)
-    {
-        var service = await _serviceRepository.GetByIdWithTypeAsync(request.serviceId, cancellationToken);
-
-        if (service.Service is null)
-            return Error.NotFound(
-                code: "Service.NotFound",
-                description: $"Service with ID '{request.serviceId}' was not found."
-            );
-
-        return service;
+        var (service, isByPan) = await _services.GetByIdWithTypeAsync(request.ServiceId, ct);
+        if (service is null)
+            return Error.NotFound("Service.NotFound", $"Service '{request.ServiceId}' not found.");
+        return (service, isByPan);
     }
 }

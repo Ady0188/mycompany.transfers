@@ -1,28 +1,20 @@
-﻿using ErrorOr;
-using MyCompany.Transfers.Api.Helpers;
+using ErrorOr;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
+using MyCompany.Transfers.Api.Helpers;
 
 namespace MyCompany.Transfers.Api.Controllers;
 
 [ApiController]
-public class BaseController : ControllerBase
+public abstract class BaseController : ControllerBase
 {
     protected IActionResult Problem(List<Error> errors)
     {
-        if (errors.Count is 0)
-        {
-            return Problem();
-        }
-
-        if (errors.All(error => error.Type == ErrorType.Validation))
+        if (errors.Count == 0) return Problem();
+        if (errors.All(e => e.Type == ErrorType.Validation))
         {
             var apiErrors = errors.Select(e => e.ToApiErrorResponse(HttpContext)).ToList();
-
-            //return ValidationProblem(errors);
             return StatusCode(StatusCodes.Status400BadRequest, apiErrors);
         }
-
         return Problem(errors[0]);
     }
 
@@ -39,24 +31,7 @@ public class BaseController : ControllerBase
             ErrorType.Failure => StatusCodes.Status500InternalServerError,
             _ => StatusCodes.Status500InternalServerError
         };
-
         var apiError = error.ToApiErrorResponse(HttpContext);
-
         return StatusCode(statusCode, apiError);
-        //return Problem(statusCode: statusCode, detail: error.Description);
-    }
-
-    protected IActionResult ValidationProblem(List<Error> errors)
-    {
-        var modelStateDictionary = new ModelStateDictionary();
-
-        foreach (var error in errors)
-        {
-            modelStateDictionary.AddModelError(
-                error.Code,
-                error.Description);
-        }
-
-        return ValidationProblem(modelStateDictionary);
     }
 }

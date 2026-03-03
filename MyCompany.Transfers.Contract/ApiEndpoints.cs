@@ -1,8 +1,15 @@
-﻿namespace MyCompany.Transfers.Contract;
+namespace MyCompany.Transfers.Contract;
 
-public class ApiEndpoints
+/// <summary>
+/// Базовые пути и эндпоинты по протоколам. Добавление нового протокола — новый класс/константы и контроллер в Api.
+/// </summary>
+public static class ApiEndpoints
 {
+    // MyCompany: JSON, авторизация X-Api-Key + X-MyCompany-Signature
     private const string BaseApi = "api/mycompany/transfers";
+
+    // Tillabuy: XML, авторизация по конфигу (termid → agent)
+    public const string TillabuyBase = "api";
 
     public static class V1
     {
@@ -10,7 +17,7 @@ public class ApiEndpoints
 
         public static class MyCompanyTransfers
         {
-            private const string Base = $"{Version}";
+            private const string Base = Version;
 
             public const string CheckAccount = $"{Base}/check";
             public const string Prepare = $"{Base}/prepare";

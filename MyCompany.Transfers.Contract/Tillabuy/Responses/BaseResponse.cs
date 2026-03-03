@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 
 namespace MyCompany.Transfers.Contract.Tillabuy.Responses;
 
@@ -6,9 +6,11 @@ namespace MyCompany.Transfers.Contract.Tillabuy.Responses;
 public class BaseResponse
 {
     [XmlElement(ElementName = "Result")]
-    public string Result { get; set; }
+    public string Result { get; set; } = string.Empty;
+
     [XmlElement(ElementName = "ErrCode")]
     public int ErrCode { get; set; }
+
     [XmlElement(ElementName = "Description")]
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
 }

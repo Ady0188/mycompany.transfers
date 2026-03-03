@@ -1,15 +1,20 @@
-﻿using MyCompany.Transfers.Application.Common.Interfaces;
-using MyCompany.Transfers.Infrastructure.Common.Caching;
-using MyCompany.Transfers.Infrastructure.Common.Persistence;
-using MyCompany.Transfers.Infrastructure.Providers;
-using MyCompany.Transfers.Infrastructure.Repositories;
-using MyCompany.Transfers.Infrastructure.Workers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MyCompany.Transfers.Application.Common.Interfaces;
+using MyCompany.Transfers.Infrastructure.Caching;
+using MyCompany.Transfers.Infrastructure.Email;
+using MyCompany.Transfers.Infrastructure.Encryption;
+using MyCompany.Transfers.Infrastructure.Helpers;
+using MyCompany.Transfers.Infrastructure.Persistence;
+using MyCompany.Transfers.Infrastructure.Providers;
+using MyCompany.Transfers.Infrastructure.Repositories;
+using MyCompany.Transfers.Infrastructure.Reports;
+using MyCompany.Transfers.Infrastructure.Workers;
 using Npgsql;
-using System.Security.Cryptography.X509Certificates;
 
 namespace MyCompany.Transfers.Infrastructure;
 
@@ -17,134 +22,111 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var npgsqlBuilder = new NpgsqlDataSourceBuilder(configuration["ConnectionStrings:DefaultConnection"]);
-        npgsqlBuilder.EnableDynamicJson();           // <-- ВАЖНО
-                                                     // если используете Newtonsoft.Json вместо System.Text.Json:
-                                                     // npgsqlBuilder.UseJsonNet();
+        var connectionString = configuration["ConnectionStrings:DefaultConnection"]
+            ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not set.");
+
+        var builder = new NpgsqlDataSourceBuilder(connectionString);
+        builder.EnableDynamicJson();
+        var dataSource = builder.Build();
+
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure())
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
         services.AddSingleton<IDbOracleConnectionFactory>(serviceProvider =>
             new OracleConnectionFactory(serviceProvider.GetRequiredService<IConfiguration>()["ConnectionStrings:OracleConnection"]!));
 
-        var dataSource = npgsqlBuilder.Build();
+        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 
-        // 2) Подсовываем data source EF Core
-        services.AddDbContext<AppDbContext>(o =>
-            o.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure()).EnableSensitiveDataLogging()
-      .LogTo(Console.WriteLine, LogLevel.Information));
-
-        services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
-
-        //services.BuildServiceProvider().GetService<AppDbContext>()!.Database.Migrate();
-
-        services.AddSingleton<IProviderHttpHandlerCache, ProviderHttpHandlerCache>();
-        services.AddSingleton<IProviderClient, OracleProviderClient>();
-        services.AddSingleton<IProviderClient, PayProrterClient>();
-        services.AddSingleton<IProviderClient, IPSClient>();
-        services.AddSingleton<IProviderClient, FIMIClient>();
-        services.AddSingleton<IProviderClient, SberClient>();
-        services.AddSingleton<IProviderClient, TBankClient>();
-        //services.AddSingleton<IProviderClient, FooPayClient>();
-        //services.AddSingleton<IProviderRouter, ProviderRouter>();
-
-        services.AddScoped<IProviderTokenService, ProviderTokenService>();
-        services.AddScoped<IProviderSender, HttpProviderSender>();
-        services.AddScoped<IProviderGateway, ProviderGateway>();
-        services.AddScoped<IProviderService, ProviderService>();
-        services.AddHttpClient("base");
-        services.AddHttpClient("Sber")
-            .ConfigurePrimaryHttpMessageHandler(() =>
-            {
-                var path = "certificates\\sber\\requestcert.pfx";
-
-                X509Certificate2 certificate = new X509Certificate2(path, "qwe123");
-
-                // Create an HttpClientHandler and configure it to use the certificate
-                HttpClientHandler handler = new HttpClientHandler();
-                handler.ClientCertificates.Add(certificate);
-                handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, SslPolicyErrors) => true;
-
-                return handler;
-            })
-            .ConfigureHttpClient(client =>
-            {
-                client.DefaultRequestHeaders.Add("Accept", "application/xml");
-            })
-            .SetHandlerLifetime(TimeSpan.FromMinutes(20));
+        services.AddMemoryCache(o => o.SizeLimit = 1024 * 1024 * 100);
+        services.AddSingleton<ICacheService, MemoryCacheService>();
 
         services.AddScoped<ITransferReadRepository, TransferRepository>();
         services.AddScoped<ITransferRepository, TransferRepository>();
+        services.AddScoped<ITransfersReportService, TransfersReportService>();
         services.AddScoped<IOutboxReadRepository, OutboxRepository>();
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<IFxRateRepository, FxRateRepository>();
         services.AddScoped<ICurrencyConverter, CurrencyConverter>();
-        //services.AddScoped<IAgentReadRepository, AgentRepository>();
-        //services.AddScoped<IAgentRepository, AgentRepository>();
-        //services.AddScoped<IServiceRepository, ServiceRepository>();
-        //services.AddScoped<IProviderRepository, ProviderRepository>();
-        //services.AddScoped<ITerminalRepository, TerminalRepository>();
-        //services.AddScoped<IAccessRepository, AccessRepository>();
-        //services.AddScoped<IParameterRepository, ParameterRepository>();
-        //services.AddScoped<IAccountDefinitionRepository, AccountDefinitionRepository>();
-        services.AddScoped<IAbsRepository, AbsRepository>();
 
-        services.AddMemoryCache(o =>
-        {
-            o.SizeLimit = 1024 * 1024 * 100; // ~100 MB
-        });
-        services.AddSingleton<ICacheService, MemoryCacheService>();
-
-        services.AddScoped<AccountDefinitionRepository>();
-        services.AddScoped<IAccountDefinitionRepository>(sp =>
-            new CachedAccountDefinitionRepository(
-                sp.GetRequiredService<AccountDefinitionRepository>(),
-                sp.GetRequiredService<ICacheService>()
-            ));
-
-        services.AddScoped<ParameterRepository>();
-        services.AddScoped<IParameterRepository>(sp =>
-            new CachedParameterRepository(
-                sp.GetRequiredService<ParameterRepository>(),
-                sp.GetRequiredService<ICacheService>()
-            ));
-
-        services.AddScoped<ProviderRepository>();
-        services.AddScoped<IProviderRepository>(sp =>
-            new CachedProviderRepository(
-                sp.GetRequiredService<ProviderRepository>(),
-                sp.GetRequiredService<ICacheService>()
-            ));
-
-        services.AddScoped<ServiceRepository>();
-        services.AddScoped<IServiceRepository>(sp =>
-            new CachedServiceRepository(
-                sp.GetRequiredService<ServiceRepository>(),
-                sp.GetRequiredService<ICacheService>()
-            ));
+        services.AddScoped<AgentRepository>();
+        services.AddScoped<IAgentRepository>(sp => sp.GetRequiredService<AgentRepository>());
+        services.AddScoped<IAgentReadRepository>(sp =>
+            new CachedAgentReadRepository(sp.GetRequiredService<AgentRepository>(), sp.GetRequiredService<ICacheService>()));
 
         services.AddScoped<AccessRepository>();
         services.AddScoped<IAccessRepository>(sp =>
-            new CachedAccessRepository(
-                sp.GetRequiredService<AccessRepository>(),
-                sp.GetRequiredService<ICacheService>()
-            ));
+            new CachedAccessRepository(sp.GetRequiredService<AccessRepository>(), sp.GetRequiredService<ICacheService>()));
+
+        services.AddScoped<ServiceRepository>();
+        services.AddScoped<IServiceRepository>(sp =>
+            new CachedServiceRepository(sp.GetRequiredService<ServiceRepository>(), sp.GetRequiredService<ICacheService>()));
+
+        services.AddScoped<ProviderRepository>();
+        services.AddScoped<IProviderRepository>(sp =>
+            new CachedProviderRepository(sp.GetRequiredService<ProviderRepository>(), sp.GetRequiredService<ICacheService>()));
 
         services.AddScoped<TerminalRepository>();
         services.AddScoped<ITerminalRepository>(sp =>
-            new CachedTerminalRepository(
-                sp.GetRequiredService<TerminalRepository>(),
-                sp.GetRequiredService<ICacheService>()
-            ));
+            new CachedTerminalRepository(sp.GetRequiredService<TerminalRepository>(), sp.GetRequiredService<ICacheService>()));
 
-        services.AddScoped<AgentRepository>();
-        services.AddScoped<IAgentRepository>(sp =>
-            sp.GetRequiredService<AgentRepository>());
+        services.AddScoped<ISentCredentialsEmailRepository, SentCredentialsEmailRepository>();
 
-        services.AddScoped<IAgentReadRepository>(sp =>
-            new CachedAgentReadRepository(
-                sp.GetRequiredService<AgentRepository>(),
-                sp.GetRequiredService<ICacheService>()));
+        services.AddScoped<IAgentBalanceHistoryRepository, AgentBalanceHistoryRepository>();
+
+        services.AddScoped<ParameterRepository>();
+        services.AddScoped<IParameterRepository>(sp =>
+            new CachedParameterRepository(sp.GetRequiredService<ParameterRepository>(), sp.GetRequiredService<ICacheService>()));
+
+        services.AddScoped<AccountDefinitionRepository>();
+        services.AddScoped<IAccountDefinitionRepository>(sp =>
+            new CachedAccountDefinitionRepository(sp.GetRequiredService<AccountDefinitionRepository>(), sp.GetRequiredService<ICacheService>()));
+
+        services.AddScoped<BinRepository>();
+        services.AddScoped<IBinRepository>(sp =>
+            new CachedBinRepository(sp.GetRequiredService<BinRepository>(), sp.GetRequiredService<ICacheService>()));
+
+        services.AddScoped<IProviderTokenService, ProviderTokenService>();
+        services.AddSingleton<IProviderHttpHandlerCache, ProviderHttpHandlerCache>();
+
+        services.AddSingleton<IProviderClient, OracleProviderClient>();
+        services.AddSingleton<IProviderClient, PayPorterClient>();
+        services.AddSingleton<IProviderClient, IPSClient>();
+        services.AddSingleton<IProviderClient, FIMIClient>();
+        services.AddSingleton<IProviderClient, SberClient>();
+        services.AddSingleton<IProviderClient, TBankClient>();
+
+        services.AddScoped<IProviderSender, HttpProviderSender>();
+        services.AddScoped<IProviderService, ProviderService>();
+        services.AddHttpClient("base").ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+            return handler;
+        });
+        services.AddHttpClient("Sber").ConfigurePrimaryHttpMessageHandler(() =>
+        {
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+            return handler;
+        });
 
         services.AddHostedService<ProviderSenderWorker>();
+        //services.AddHostedService<DailyBalanceWorker>();
+        //services.AddHostedService<TransferToABSIBTSenderWorker>();
+        //services.AddHostedService<TransferToABSOtherSenderWorker>();
+
+        var encKey = configuration[$"{CredentialsEncryptionOptions.SectionName}:KeyBase64"];
+        if (!string.IsNullOrWhiteSpace(encKey))
+        {
+            services.Configure<CredentialsEncryptionOptions>(configuration.GetSection(CredentialsEncryptionOptions.SectionName));
+            services.AddSingleton<ICredentialsEncryption, AesCredentialsEncryption>();
+            services.AddHostedService<CredentialsEncryptionInitializer>();
+        }
+
+        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.AddScoped<ITerminalCredentialsEmailSender, SmtpTerminalCredentialsEmailSender>();
+        services.AddScoped<ITerminalCredentialsArchiveBuilder, EncryptedTerminalCredentialsArchiveBuilder>();
 
         return services;
     }

@@ -1,67 +1,34 @@
-﻿using Dapper;
+using Dapper;
+using Microsoft.Extensions.Logging;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
-using MyCompany.Transfers.Infrastructure.Repositories;
-using NLog;
 using System.Data;
 using System.Text.Json;
 using System.Xml.Linq;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 
+/// <summary>
+/// Stub for IBT (Oracle) provider. Configure Oracle and IDbOracleConnectionFactory to enable.
+/// </summary>
 internal sealed class OracleProviderClient : IProviderClient
 {
     public string ProviderId => "IBT";
-    private Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IDbOracleConnectionFactory _dbConnectionFactory;
+    private readonly ILogger<OracleProviderClient> _logger;
 
-    public OracleProviderClient(IDbOracleConnectionFactory dbConnectionFactory)
+    public OracleProviderClient(IDbOracleConnectionFactory dbConnectionFactory, ILogger<OracleProviderClient> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _logger = logger;
     }
 
-    //public async Task<ProviderCheckResult> CheckAsync(ProviderRequest request, CancellationToken ct)
-    //{
-    //    try
-    //    {
-    //        var result = await SendRequest(string.Empty, ct);
-
-    //        if (result is null)
-    //            return new ProviderCheckResult(false, null, null);
-
-
-
-    //        return new ProviderCheckResult(true, new Dictionary<string, string>{{result, result}}, null);
-    //    }
-    //    catch (Exception ex)
-    //    {
-    //        return new ProviderCheckResult(false, null, ex.Message);
-    //    }
-    //}
-
-    //public async Task<ProviderResult> SendAsync(ProviderRequest request, CancellationToken ct)
-    //{
-    //    try
-    //    {
-    //        var result = await SendRequest(string.Empty, ct);
-
-    //        if (result is null)
-    //            return new ProviderResult(false, null, null);
-            
-    //        return new ProviderResult(true, result, null);
-    //    }
-    //    catch (Exception ex)
-    //    {
-    //        return new ProviderResult(false, null, ex.Message);
-    //    }
-    //}
-
-    public async Task<ProviderResult> SendAsync(Provider p, ProviderRequest r, CancellationToken cancellationToken = default)
+    public async Task<ProviderResult> SendAsync(Provider p, ProviderRequest r, CancellationToken ct)
     {
-        var settings = JsonSerializer.Deserialize<ProviderSettings>(p.SettingsJson)
+        var settings = p.SettingsJson.Deserialize<ProviderSettings>()
                        ?? new ProviderSettings();
 
         if (!settings.Operations.TryGetValue(r.Operation, out var op))
@@ -74,31 +41,36 @@ internal sealed class OracleProviderClient : IProviderClient
 
         var request = op.BodyTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
 
-        using var connection = await _dbConnectionFactory.CreateOracleConnectionAsync(cancellationToken);
+        _logger.LogInformation($"[{r.ExternalId}] [{r.Source}] Oracl request: {request}");
+
+        using var connection = await _dbConnectionFactory.CreateOracleConnectionAsync(ct);
         var parameters = new DynamicParameters();
         parameters.Add("strin", request, DbType.String, ParameterDirection.Input);
         parameters.Add("errcode", dbType: DbType.Int32, direction: ParameterDirection.Output);
         parameters.Add("clobResult", dbType: DbType.String, direction: ParameterDirection.Output, size: int.MaxValue);
 
         // Выполнение запроса с использованием Dapper
-        await connection.ExecuteAsync("company_mobile_banking.run_synch_query", parameters, commandType: CommandType.StoredProcedure);
+        await connection.ExecuteAsync("ibt_mobile_banking.run_synch_query", parameters, commandType: CommandType.StoredProcedure);
 
         int errcode = parameters.Get<int>("errcode");
         string response = parameters.Get<string>("clobResult");
 
         response = response.Replace("<?xml version=\"1.0\"?>", "").Replace("OK_UTG", "OK").Trim().Replace("\n", "").Replace("\r", "");
 
-        response = @"{""result"":0,""description"":""OK"",""fullname"":""Саидмирзоев Адаб Саидмирзоевич"",""currencies"":[""USD"",""EUR""]}";
-        response = @"{""result"":0,""description"":""OK"",""data"":{""fullname"":""Фамилия Имя Отчество"",""currencies"":[""TJS"",""RUB"",""USD""]}}";
-        if (string.IsNullOrWhiteSpace(response))
-            return null;
+        //response = @"{""result"":0,""description"":""OK"",""fullname"":""Саидмирзоев Адаб Саидмирзоевич"",""currencies"":[""USD"",""EUR""]}";
+        //response = @"{""result"":0,""description"":""OK"",""data"":{""fullname"":""Фамилия Имя Отчество"",""currencies"":[""TJS"",""RUB"",""USD""]}}";
+        //response = @"{ ""result"": 0, ""description"": ""OK"", ""receiver"": { ""fullname"": ""Фамилия Имя Отчество"", ""firstname"": ""Имя"", ""lastname"": ""Фамилия"", ""middlename"": ""Отчество"", ""phone"": ""992911223344"", ""account_number"": ""987654321"", ""residency"": 0, ""birth_date"": ""1966-01-03"" }, ""currencies"": [""TJS"", ""RUB"", ""USD""] }";
+        if (string.IsNullOrWhiteSpace(response) || errcode != 200)
+            return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Provider returned error");
 
-        _logger.Debug($"Response Oracl client: {response} {request}");
+        _logger.LogInformation($"[{r.ExternalId}] [{r.Source}] Oracl response: {response}");
 
 
-        var parsed = await ParseResponseAsync(response, op, cancellationToken);
+        var parsed = await ParseResponseAsync(response, op, ct);
 
-        if (!parsed.Success)
+        if (!parsed.Success && (parsed.ErrorMessage == "Получатель не найден" || parsed.ErrorMessage == "RECEIVER_NOT_FOUND"))
+            return new ProviderResult(OutboxStatus.NOT_FOUND, parsed.ResponseFieldValues, parsed.ErrorMessage ?? "Provider returned error");
+        else if (!parsed.Success)
             return new ProviderResult(OutboxStatus.FAILED, parsed.ResponseFieldValues, parsed.ErrorMessage ?? "Provider returned error");
 
 
@@ -130,13 +102,17 @@ internal sealed class OracleProviderClient : IProviderClient
 
         if (!string.IsNullOrWhiteSpace(op.ResponseField))
         {
-            foreach (var fieldPath in op.ResponseField.Split(
+            foreach (var field in op.ResponseField.Split(
                          ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                var value = GetXmlValue(root, fieldPath);
+                var fieldPath = field.Split("|");
+                if (fieldPath.Length == 1)
+                    continue;
+
+                var value = GetXmlValue(root, fieldPath[0]);
                 if (value is not null)
                 {
-                    responseFieldValues[fieldPath] = value;
+                    responseFieldValues[fieldPath[1]] = value;
                 }
             }
         }
@@ -210,58 +186,6 @@ internal sealed class OracleProviderClient : IProviderClient
         return values.Length > 0 ? string.Join(",", values) : current.Value;
     }
 
-    //static async Task<ParsedResponse> ParseXmlResponseAsync(
-    //    string xml,
-    //    ProviderOperationSettings op,
-    //    CancellationToken ct)
-    //{
-    //    if (string.IsNullOrWhiteSpace(xml))
-    //        return new ParsedResponse(false, null, "Empty XML response");
-
-    //    var xdoc = XDocument.Parse(xml);
-
-    //    Dictionary<string, string> responseFieldValues = new();
-    //    foreach (var field in op.ResponseField!.Split(","))
-    //    {
-    //        if (!string.IsNullOrWhiteSpace(field))
-    //        {
-    //            // field ожидаем как XPath: "/response/someField"
-    //            var elem = xdoc.XPathSelectElement(field);
-    //            if (elem is not null)
-    //            {
-    //                responseFieldValues[field] = elem.Value;
-    //            }
-    //        }
-    //    }
-    //    //string? opId = null;
-    //    //if (!string.IsNullOrWhiteSpace(op.ResponseField))
-    //    //{
-    //    //    // ResponseField ожидаем как XPath: "/response/operationId"
-    //    //    var elemOp = xdoc.XPathSelectElement(op.ResponseField);
-    //    //    opId = elemOp?.Value;
-    //    //}
-
-    //    bool success = true;
-    //    string? errorMessage = null;
-
-    //    if (!string.IsNullOrWhiteSpace(op.SuccessField))
-    //    {
-    //        var elem = xdoc.XPathSelectElement(op.SuccessField);
-    //        var actual = elem?.Value ?? string.Empty;
-    //        var expected = op.SuccessValue ?? "0";
-
-    //        success = string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
-
-    //        if (!success && !string.IsNullOrWhiteSpace(op.ErrorField))
-    //        {
-    //            var errElem = xdoc.XPathSelectElement(op.ErrorField);
-    //            errorMessage = errElem?.Value;
-    //        }
-    //    }
-
-    //    return new ParsedResponse(success, responseFieldValues, errorMessage);
-    //}
-
     static ParsedResponse ParseJsonResponse(
         string resp,
         ProviderOperationSettings op)
@@ -277,13 +201,17 @@ internal sealed class OracleProviderClient : IProviderClient
         // читаем ResponseField как список путей через запятую
         if (!string.IsNullOrWhiteSpace(op.ResponseField))
         {
-            foreach (var fieldPath in op.ResponseField.Split(
+            foreach (var field in op.ResponseField.Split(
                          ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                var value = GetJsonValue(root, fieldPath);
+                var fieldPath = field.Split("|");
+                if (fieldPath.Length == 1)
+                    continue;
+
+                var value = GetJsonValue(root, fieldPath[0]);
                 if (value is not null)
                 {
-                    responseFieldValues[fieldPath] = value;
+                    responseFieldValues[fieldPath[1]] = value;
                 }
             }
         }

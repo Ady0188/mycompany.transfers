@@ -1,3 +1,8 @@
-﻿namespace MyCompany.Transfers.Domain.Accounts.Enums;
+namespace MyCompany.Transfers.Domain.Accounts.Enums;
 
-public enum AccountNormalizeMode { None, Trim, DigitsOnly }
+public enum AccountNormalizeMode
+{
+    None,
+    Trim,
+    DigitsOnly
+}

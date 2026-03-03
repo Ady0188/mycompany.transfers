@@ -1,375 +1,127 @@
-﻿using ErrorOr;
-using MyCompany.Transfers.Api.Helpers;
-using MyCompany.Transfers.Application.Agents.Queries;
-using MyCompany.Transfers.Application.Common.Helpers;
-using MyCompany.Transfers.Application.MyCompanyTransfers.Commands;
-using MyCompany.Transfers.Application.MyCompanyTransfers.Queries;
-using MyCompany.Transfers.Application.Services.Queries;
-using MyCompany.Transfers.Contract.Tillabuy.Requests;
-using MyCompany.Transfers.Contract.Tillabuy.Responses;
-using MyCompany.Transfers.Domain.Services;
-using MyCompany.Transfers.Domain.Transfers;
-using MyCompany.Transfers.Infrastructure.Helpers;
+using System.Text.Json;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
-using NLog;
-using System.Text.Json;
+using MyCompany.Transfers.Application.Agents.Queries;
+using MyCompany.Transfers.Application.Rates.Queries;
+using MyCompany.Transfers.Application.Services.Queries;
+using MyCompany.Transfers.Application.Transfers.Commands;
+using MyCompany.Transfers.Application.Transfers.Queries;
+using MyCompany.Transfers.Contract;
+using MyCompany.Transfers.Contract.Tillabuy.Requests;
+using MyCompany.Transfers.Contract.Tillabuy.Responses;
+using MyCompany.Transfers.Domain.Transfers;
+using MyCompany.Transfers.Api.Helpers;
 
 namespace MyCompany.Transfers.Api.Controllers;
 
+/// <summary>
+/// Протокол Tillabuy: XML, авторизация по конфигу (termid → agent).
+/// Функции: check (prepare), payment (confirm/status), getbalance, getrate.
+/// Коды ошибок по протоколу НКО — см. TillabuyExtensions.Errors / ApiErrors.
+/// </summary>
 [ApiController]
-[Route("api")]
+[Route(ApiEndpoints.TillabuyBase)]
+[Consumes("application/xml", "application/json")]
 [Produces("application/xml")]
-[Consumes("application/xml")]
 [UseCustomXml]
 [ApiExplorerSettings(GroupName = "tillabuy")]
-public class TillabuyController : ControllerBase
+public sealed class TillabuyController : ControllerBase
 {
     private readonly ISender _mediator;
-    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<TillabuyController> _logger;
 
-    private delegate Task<IActionResult> QueriesDelegate(HttpRequest request);
-    private readonly Dictionary<string, QueriesDelegate> Queries;
+    private readonly Dictionary<string, string> _agents;
+    private readonly Dictionary<string, string> _terminals;
+    private readonly Dictionary<string, string> _termsCurrency;
 
-    private readonly Dictionary<string, string> agents;
-    private readonly Dictionary<string, string> terms;
-    private readonly Dictionary<string, string> termsCurrency;
-    private readonly Dictionary<int, string> paramsDict;
-
-    public TillabuyController(ISender mediator, IConfiguration configuration, IConfiguration config)
+    public TillabuyController(ISender mediator, IConfiguration configuration, ILogger<TillabuyController> logger)
     {
         _mediator = mediator;
+        _configuration = configuration;
+        _logger = logger;
+        _agents = _configuration.GetSection("Tillabuy:Agents").Get<Dictionary<string, string>>() ?? new Dictionary<string, string>();
+        _terminals = _configuration.GetSection("Tillabuy:Terminals").Get<Dictionary<string, string>>() ?? new Dictionary<string, string>();
+        _termsCurrency = _configuration.GetSection("Tillabuy:TermsCurrency").Get<Dictionary<string, string>>() ?? new Dictionary<string, string>();
+    }
 
-        Queries = new Dictionary<string, QueriesDelegate>
+    [HttpGet]
+    public async Task<IActionResult> Handle([FromQuery] string function, CancellationToken ct)
+    {
+        var functionLower = function?.ToLowerInvariant() ?? string.Empty;
+        _logger.LogDebug("Tillabuy request: function={Function}, query={Query}", function, Request.QueryString);
+
+        try
+        {
+            return functionLower switch
             {
-                { "payment", PaymentAsync },
-                { "check", CheckAsync },
-                //{ "prepare", PrepareAsync },
-                //{ "getproducts", GetProductsAsync },
-                { "getbalance", GetBalanceAsync },
-                { "getrate", GetRateAsync }
+                "check" => await CheckAsync(ct),
+                "payment" => await PaymentAsync(ct),
+                "getrate" => await GetRateAsync(ct),
+                "getbalance" => await GetBalanceAsync(ct),
+                _ => Ok(new BaseResponse { Result = "Error", ErrCode = -1, Description = "Unknown function" })
             };
-
-        agents = config.GetSection("Agents").Get<Dictionary<string, string>>()!;
-        terms = config.GetSection("Terminals").Get<Dictionary<string, string>>()!;
-        termsCurrency = config.GetSection("TermsCurrency").Get<Dictionary<string, string>>()!;
-
-        paramsDict = new Dictionary<int, string>
+        }
+        catch (KeyNotFoundException knfEx)
         {
-            { 1, "account" },
-            { 901, "sender_fullname" },
-            { 902, "sender_doc_type" },
-            { 903, "sender_doc_number" },
-            { 904, "sender_phone" },
-            { 905, "sender_doc_issuer" },
-            { 906, "sender_doc_issue_date" },
-            { 907, "sender_birth_date" },
-            { 908, "sender_birth_place" },
-            { 909, "sender_citizenship" },
-            { 910, "sender_registration_address" },
-            { 911, "sender_doc_department_code" },
-            { 920, "sender_lastname" },
-            { 921, "sender_firstname" },
-            { 922, "sender_middlename" },
-            { 932, "sender_residency" },
-            { 934, "receiver_firstname" },
-            { 936, "account_number" }
-        };
+            _logger.LogDebug("Tillabuy KeyNotFoundException: {Message}", knfEx.Message);
+            var code = knfEx.Message.StartsWith("TermId", StringComparison.OrdinalIgnoreCase) ? 8 : 5;
+            var desc = TillabuyExtensions.Errors.TryGetValue(code, out var d) ? d : knfEx.Message;
+            return Ok(new BaseResponse { Result = "Error", ErrCode = code, Description = desc });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Tillabuy error");
+            return StatusCode(500, new BaseResponse { Result = "Error", ErrCode = 9, Description = TillabuyExtensions.Errors[9] });
+        }
     }
 
-    private async Task<IActionResult> GetRateAsync(HttpRequest request)
+    private async Task<IActionResult> CheckAsync(CancellationToken ct)
     {
-        var queryParams = request.Query.GetParameters();
+        var (success, transaction, service, errorResponse) = await CheckRequestAsync(ct);
+        if (!success)
+            return Ok(errorResponse!);
 
-        var clientGetRateQuery = new GetFxRateQuery("RUB", queryParams["curisocode"]);
+        var cmd = new PrepareCommand(
+            transaction!.Agent,
+            transaction.TerminalId,
+            transaction.PaymentExtId,
+            Contract.Core.Requests.TransferMethod.ByPhone,
+            transaction.Account,
+            transaction.Amount,
+            "RUB",
+            transaction.PayoutCurrency,
+            transaction.Service,
+            transaction.Parameters);
 
-        var clientGetRateResult = await _mediator.Send(clientGetRateQuery);
-
-        if (clientGetRateResult.IsError)
-            return Ok(new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = -1,
-                Description = string.Join(" ", clientGetRateResult.Errors.Select(e => e.Description))
-            });
-
-        return Ok(new GetRateResponse
-        {
-            Result = "OK",
-            ErrCode = 0,
-            Rate = clientGetRateResult.Value.Rate
-        });
-    }
-
-    private async Task<IActionResult> GetBalanceAsync(HttpRequest request)
-    {
-        var queryParams = request.Query.GetParameters();
-        var term = terms[queryParams["termid"]];
-        var agent = agents[term];
-
-        var clientGetBalanceQuery = new GetBalanceQuery(agent, queryParams["curisocode"]);
-
-        var clientGetBalanceResult = await _mediator.Send(clientGetBalanceQuery);
-
-        if (clientGetBalanceResult.IsError)
-            return Ok(new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = -1,
-                Description = string.Join(" ", clientGetBalanceResult.Errors.Select(e => e.Description))
-            });
-
-        return Ok(new GetBalanceResponse
-        {
-            Result = "OK",
-            ErrCode = 0,
-            Balance = clientGetBalanceResult.Value.Balances.First().Amount
-        });
-    }
-
-    private async Task<(bool IsSuccess, TillabuyTrn? Trn, Service? Service, BaseResponse? response)> CheckRequestAsync(HttpRequest request)
-    {
-        var queryParams = request.Query.GetParameters();
-
-        var transaction = request.Query.MapToTransaction(agents, terms, termsCurrency, paramsDict);
-
-        var agentQuery = new GetAgentByIdQuery(transaction.Agent);
-
-        var agentResult = await _mediator.Send(agentQuery);
-
-        if (agentResult.IsError)
-        {
-            return (false, null, null, new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = 8,
-                Description = TillabuyExtensions.Errors[8]
-            });
-        }
-
-        var agent = agentResult.Value;
-
-        var serviceQuery = new GetServiceByIdQuery(transaction.Service);
-
-        var serviceResult = await _mediator.Send(serviceQuery);
-
-        if (serviceResult.IsError)
-        {
-            return (false, null, null, new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = 5,
-                Description = TillabuyExtensions.Errors[5]
-            });
-        }
-
-        var service = serviceResult.Value.Service;
-        var isByPan = serviceResult.Value.IsByPan;
-
-        if (isByPan)
-        {
-            var agentSettings = agent.SettingsJson.Deserialize<Dictionary<string, string>>();
-
-            if (!agentSettings!.TryGetValue("PrivateKeyPath", out string? privateKeyPath) || string.IsNullOrEmpty(privateKeyPath))
-            {
-                return (false, null, null, new BaseResponse
-                {
-                    Result = "Error",
-                    ErrCode = 14,
-                    Description = TillabuyExtensions.Errors[14]
-                });
-            }
-
-            agentSettings.TryGetValue("PrivateKeyPass", out string? privateKeyPass);
-
-            var decrypted = transaction.Account.DecryptParameter(privateKeyPath, privateKeyPass);
-
-            if (decrypted.IsError)
-            {
-                return (false, null, null, new BaseResponse
-                {
-                    Result = "Error",
-                    ErrCode = 14,
-                    Description = decrypted.Errors.First().Description
-                });
-            }
-
-            transaction.Account = decrypted.Value;
-            transaction.Account = "4279380036590729";
-        }
-
-        return (true, transaction, service, null);
-    }
-
-    //private async Task<IActionResult> GetProductsAsync(HttpRequest request)
-    //{
-    //    var getProductsQuery = new GetProductsQuery(request.QueryString.Value!);
-
-    //    var getProductsResult = await _mediator.Send(getProductsQuery);
-
-    //    if (getProductsResult.IsError)
-    //        return Ok(new BaseResponse
-    //        {
-    //            Result = "Error",
-    //            ErrCode = -1,
-    //            Description = string.Join(" ", getProductsResult.Errors.Select(e => e.Description))
-    //        });
-
-    //    return Ok(getProductsResult.Value);
-    //}
-
-    //private async Task<IActionResult> PrepareAsync(HttpRequest request)
-    //{
-    //    string? extTermId = request.Query.GetTerminalId();
-
-    //    var prepareQuery = new PrepareQuery(extTermId, request.QueryString.Value!);
-
-    //    var prepareResult = await _mediator.Send(prepareQuery);
-
-    //    if (prepareResult.IsError)
-    //        return Ok(new BaseResponse
-    //        {
-    //            Result = "Error",
-    //            ErrCode = int.Parse(prepareResult.Errors.First().Code),
-    //            Description = string.Join(" ", prepareResult.Errors.Select(e => e.Description))
-    //        });
-
-    //    return Ok(prepareResult.Value);
-    //}
-
-    private async Task<IActionResult> CheckAsync(HttpRequest request)
-    {
-        var check = await CheckRequestAsync(request);
-
-        if (!check.IsSuccess)
-        {
-            return Ok(check.response!);
-        }
-
-        var transaction = check.Trn!;
-
-        //var queryParams = request.Query.GetParameters();
-
-        //var transaction = request.Query.MapToTransaction(agents, terms, termsCurrency, paramsDict);
-
-        //var agentQuery = new GetAgentByIdQuery(transaction.Agent);
-
-        //var agentResult = await _mediator.Send(agentQuery);
-
-        //if (agentResult.IsError)
-        //{
-        //    return Ok(new BaseResponse
-        //    {
-        //        Result = "Error",
-        //        ErrCode = 8,
-        //        Description = TillabuyExtensions.Errors[8]
-        //    });
-        //}
-
-        //var agent = agentResult.Value;
-
-        //var serviceQuery = new GetServiceByIdQuery(transaction.Service);
-
-        //var serviceResult = await _mediator.Send(serviceQuery);
-
-        //if (serviceResult.IsError)
-        //{
-        //    return Ok(new BaseResponse
-        //    {
-        //        Result = "Error",
-        //        ErrCode = 5,
-        //        Description = TillabuyExtensions.Errors[5]
-        //    });
-        //}
-
-        //var service = serviceResult.Value.Service;
-        //var isByPan = serviceResult.Value.IsByPan;
-
-        //if (isByPan)
-        //{
-        //    var agentSettings = agent.SettingsJson.Deserialize<Dictionary<string, string>>();
-
-        //    if (!agentSettings!.TryGetValue("PrivateKeyPath", out string? privateKeyPath) || string.IsNullOrEmpty(privateKeyPath))
-        //    {
-        //        return Ok(new BaseResponse
-        //        {
-        //            Result = "Error",
-        //            ErrCode = 14,
-        //            Description = TillabuyExtensions.Errors[14]
-        //        });
-        //    }
-
-        //    agentSettings.TryGetValue("PrivateKeyPass", out string? privateKeyPass);
-
-        //    var decrypted = transaction.Account.DecryptParameter(privateKeyPath, privateKeyPass);
-
-        //    if (decrypted.IsError)
-        //    {
-        //        return Ok(new BaseResponse
-        //        {
-        //            Result = "Error",
-        //            ErrCode = 14,
-        //            Description = decrypted.Errors.First().Description
-        //        });
-        //    }
-
-        //    transaction.Account = decrypted.Value;
-        //}
-
-        var prepareCommand = new PrepareCommand(transaction.Agent, transaction.TerminalId, transaction.PaymentExtId, 0, transaction.Account, transaction.Amount, "RUB", transaction.Currency, transaction.Service, transaction.Parameters);
-
-        var prepareResult = await _mediator.Send(prepareCommand);
-
+        var prepareResult = await _mediator.Send(cmd, ct);
         if (prepareResult.IsError)
         {
-            if (!TillabuyExtensions.ApiErrors.TryGetValue(prepareResult.Errors.First().Code, out int err))
-                err = 14;
-
-            return Ok(new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = err,
-                Description = TillabuyExtensions.Errors[err]
-            });
+            var errCode = prepareResult.Errors.Count > 0 ? prepareResult.Errors[0].ToTillabuyErrorCode() : 14;
+            var desc = TillabuyExtensions.Errors.TryGetValue(errCode, out var d) ? d : string.Join(" ", prepareResult.Errors.Select(e => e.Description));
+            return Ok(new BaseResponse { Result = "Error", ErrCode = errCode, Description = desc });
         }
 
         var response = prepareResult.Value.MapToResponse();
-        _logger.Debug($"{transaction.PaymentExtId} Tillabut Response: {JsonSerializer.Serialize(response)}");
-
+        _logger.LogDebug("Tillabuy check PaymExtId={PaymExtId}", transaction.PaymentExtId);
         return Ok(response);
     }
 
-    private async Task<IActionResult> PaymentAsync(HttpRequest request)
+    private async Task<IActionResult> PaymentAsync(CancellationToken ct)
     {
-        var check = await CheckRequestAsync(request);
+        var (success, transaction, service, errorResponse) = await CheckRequestAsync(ct);
+        if (!success)
+            return Ok(errorResponse!);
 
-        if (!check.IsSuccess)
+        var statusResult = await _mediator.Send(new GetTransferByExternalIdQuery(transaction!.Agent, transaction.PaymentExtId), ct);
+        if (statusResult.IsError)
         {
-            return Ok(check.response!);
+            var errCode = statusResult.Errors.Count > 0 ? statusResult.Errors[0].ToTillabuyErrorCode() : 14;
+            var desc = TillabuyExtensions.Errors.TryGetValue(errCode, out var d) ? d : string.Join(" ", statusResult.Errors.Select(e => e.Description));
+            return Ok(new BaseResponse { Result = "Error", ErrCode = errCode, Description = desc });
         }
 
-        var transaction = check.Trn!;
-        var service = check.Service!;
-
-        var getStatusQuery = new GetTransferByExternalIdQuery(transaction.Agent, transaction.PaymentExtId);
-
-        var getStatusResult = await _mediator.Send(getStatusQuery);
-
-        if (getStatusResult.IsError)
-        {
-            if (!TillabuyExtensions.ApiErrors.TryGetValue(getStatusResult.Errors.First().Code, out int err))
-                err = 14;
-
-            return Ok(new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = err,
-                Description = TillabuyExtensions.Errors[err]
-            });
-        }
-
-        var trn = getStatusResult.Value;
+        var trn = statusResult.Value;
 
         if (trn.Amount.Minor != transaction.Amount)
         {
@@ -382,11 +134,20 @@ public class TillabuyController : ControllerBase
                 PaymExtId = transaction.PaymentExtId
             });
         }
-        else if (transaction.Service != trn.ServiceId ||
-            transaction.Account != trn.Account ||
-            !trn.Parameters.TryGetValue("sender_fullname", out string senderName) ||
-            string.IsNullOrEmpty(senderName) ||
-            transaction.SenderName != senderName)
+
+        if (transaction.Service != trn.ServiceId || transaction.Account != trn.Account)
+        {
+            return Ok(new NKOPaymentResponse
+            {
+                Balance = 0,
+                Description = TillabuyExtensions.Errors[42],
+                Result = "Error",
+                ErrCode = 42,
+                PaymExtId = transaction.PaymentExtId
+            });
+        }
+
+        if (!trn.Parameters.TryGetValue("sender_fullname", out var senderName) || string.IsNullOrEmpty(senderName) || transaction.SenderName != senderName)
         {
             return Ok(new NKOPaymentResponse
             {
@@ -410,7 +171,7 @@ public class TillabuyController : ControllerBase
                     PaymExtId = transaction.PaymentExtId
                 });
             case TransferStatus.SUCCESS:
-                var res = new NKOPaymentResponse
+                var successResponse = new NKOPaymentResponse
                 {
                     Balance = 0,
                     Description = "Платеж исполнен",
@@ -418,93 +179,150 @@ public class TillabuyController : ControllerBase
                     ErrCode = 0,
                     PaymExtId = transaction.PaymentExtId
                 };
-
-                if (trn.CurrentQuote!.CreditedAmount.Currency.Equals("RUB"))
+                if (trn.CurrentQuote is not null && !string.Equals(trn.CurrentQuote.CreditedAmount.Currency, "RUB", StringComparison.OrdinalIgnoreCase))
                 {
-                    res.ExchangeRate = trn.CurrentQuote.ExchangeRate;
-                    res.Currency = trn.CurrentQuote.CreditedAmount.Currency;
-                    res.CreditAmount = trn.CurrentQuote.CreditedAmount.Minor;
+                    successResponse.ExchangeRate = trn.CurrentQuote.ExchangeRate;
+                    successResponse.Currency = trn.CurrentQuote.CreditedAmount.Currency;
+                    successResponse.CreditAmount = trn.CurrentQuote.CreditedAmount.Minor;
                 }
-
-                return Ok(res);
+                return Ok(successResponse);
             case TransferStatus.TECHNICAL:
             case TransferStatus.FAILED:
-            case TransferStatus.EXPIRED: 
-                return Ok(new BaseResponse
-                {
-                    Result = "Error",
-                    ErrCode = 14,
-                    Description = TillabuyExtensions.Errors[14]
-                });
-            case TransferStatus.FRAUD: 
-                return Ok(new BaseResponse
-                {
-                    Result = "Error",
-                    ErrCode = 55,
-                    Description = TillabuyExtensions.Errors[55]
-                });
+            case TransferStatus.EXPIRED:
+                return Ok(new BaseResponse { Result = "Error", ErrCode = 14, Description = TillabuyExtensions.Errors[14] });
+            case TransferStatus.FRAUD:
+                return Ok(new BaseResponse { Result = "Error", ErrCode = 55, Description = TillabuyExtensions.Errors[55] });
         }
 
-        var confirmCommand = new ConfirmCommand(transaction.Agent, transaction.TerminalId, transaction.PaymentExtId, trn.CurrentQuote!.Id);
-
-        var confirmResult = await _mediator.Send(confirmCommand);
-
+        var confirmCmd = new ConfirmCommand(transaction.Agent, transaction.TerminalId, transaction.PaymentExtId, trn.CurrentQuote!.Id);
+        var confirmResult = await _mediator.Send(confirmCmd, ct);
         if (confirmResult.IsError)
         {
-            if (!TillabuyExtensions.ApiErrors.TryGetValue(confirmResult.Errors.First().Code, out int err))
-                err = 14;
-
-            return Ok(new BaseResponse
-            {
-                Result = "Error",
-                ErrCode = err,
-                Description = TillabuyExtensions.Errors[err]
-            });
+            var errCode = confirmResult.Errors.Count > 0 ? confirmResult.Errors[0].ToTillabuyErrorCode() : 14;
+            var desc = TillabuyExtensions.Errors.TryGetValue(errCode, out var d) ? d : string.Join(" ", confirmResult.Errors.Select(e => e.Description));
+            return Ok(new BaseResponse { Result = "Error", ErrCode = errCode, Description = desc });
         }
 
-        var response = confirmResult.Value.MapToResponse(trn.ProvReceivedParams, trn.CurrentQuote.ExchangeRate);
-        _logger.Debug($"{transaction.PaymentExtId} Tillabut Response: {JsonSerializer.Serialize(response)}");
-
+        var response = confirmResult.Value.MapToResponse(
+            trn.ProvReceivedParams,
+            trn.CurrentQuote?.ExchangeRate,
+            trn.CurrentQuote != null ? new Domain.Transfers.Dtos.MoneyDto { Currency = trn.CurrentQuote.CreditedAmount.Currency, Amount = trn.CurrentQuote.CreditedAmount.Minor } : null);
+        _logger.LogDebug("Tillabuy payment PaymExtId={PaymExtId}", transaction.PaymentExtId);
         return Ok(response);
     }
 
-    [HttpGet]
-    public async Task<IActionResult> TillabayRequests([FromQuery] string function)
+    private async Task<IActionResult> GetRateAsync(CancellationToken ct)
     {
+        var queryParams = Request.Query.GetParameters();
+        if (!TryResolveAgent(queryParams, out var agentId, out var error))
+            return Ok(error!);
+
+        var baseCurrency = queryParams.GetValueOrDefault("basecurrency", "RUB");
+        var quoteCurrency = queryParams.GetValueOrDefault("curisocode", "TJS");
+
+        var result = await _mediator.Send(new GetFxRateQuery(agentId!, baseCurrency, quoteCurrency), ct);
+        if (result.IsError)
+            return Ok(new BaseResponse { Result = "Error", ErrCode = -1, Description = string.Join(" ", result.Errors.Select(e => e.Description)) });
+
+        return Ok(new GetRateResponse { Result = "OK", ErrCode = 0, Rate = result.Value.Rate });
+    }
+
+    private async Task<IActionResult> GetBalanceAsync(CancellationToken ct)
+    {
+        var queryParams = Request.Query.GetParameters();
+        if (!TryResolveAgent(queryParams, out var agentId, out var error))
+            return Ok(error!);
+
+        var currency = queryParams.GetValueOrDefault("curisocode", "TJS");
+        var result = await _mediator.Send(new GetBalanceQuery(agentId!, currency), ct);
+        if (result.IsError)
+            return Ok(new BaseResponse { Result = "Error", ErrCode = -1, Description = string.Join(" ", result.Errors.Select(e => e.Description)) });
+
+        var balance = result.Value.Balances.FirstOrDefault(b => string.Equals(b.Currency, currency, StringComparison.OrdinalIgnoreCase));
+        return Ok(new GetBalanceResponse { Result = "OK", ErrCode = 0, Balance = (balance?.Amount ?? 0) / 100m });
+    }
+
+    private async Task<(bool IsSuccess, TillabuyTrn? Trn, Domain.Services.Service? Service, BaseResponse? ErrorResponse)> CheckRequestAsync(CancellationToken ct)
+    {
+        var queryParams = Request.Query;
+        TillabuyTrn transaction;
         try
         {
-            _logger.Debug($"PaymentController request: function={function}; {Request.QueryString.Value}");
+            transaction = queryParams.MapToTransaction(_agents, _terminals, _termsCurrency);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw;
+        }
 
-            function = function.ToLower();
+        var agentResult = await _mediator.Send(new GetAgentByIdQuery(transaction.Agent), ct);
+        if (agentResult.IsError)
+        {
+            var errCode = agentResult.Errors[0].ToTillabuyErrorCode();
+            return (false, null, null, new BaseResponse { Result = "Error", ErrCode = errCode, Description = TillabuyExtensions.Errors.GetValueOrDefault(errCode, agentResult.Errors[0].Description) });
+        }
 
-            if (Queries.ContainsKey(function))
+        var agent = agentResult.Value;
+
+        var serviceResult = await _mediator.Send(new GetServiceByIdQuery(transaction.Service), ct);
+        if (serviceResult.IsError)
+        {
+            var errCode = 5;
+            return (false, null, null, new BaseResponse { Result = "Error", ErrCode = errCode, Description = TillabuyExtensions.Errors.GetValueOrDefault(errCode, "Service not found") });
+        }
+
+        var (service, isByPan) = serviceResult.Value;
+
+        if (isByPan)
+        {
+            var agentSettings = JsonSerializer.Deserialize<Dictionary<string, string>>(agent.SettingsJson) ?? new Dictionary<string, string>();
+            if (!agentSettings.TryGetValue("PrivateKeyPath", out var privateKeyPath) || string.IsNullOrWhiteSpace(privateKeyPath))
             {
-                QueriesDelegate selectedMethod = Queries[function];
-                return await selectedMethod(Request);
+                return (false, null, null, new BaseResponse
+                {
+                    Result = "Error",
+                    ErrCode = 14,
+                    Description = TillabuyExtensions.Errors.GetValueOrDefault(14, "PrivateKeyPath not configured")
+                });
             }
+            agentSettings.TryGetValue("PrivateKeyPass", out var privateKeyPass);
 
-            _logger.Debug($"PaymentController BadRequest: function not found");
-            return BadRequest();
-
-        }
-        catch (KeyNotFoundException knfEx)
-        {
-            _logger.Debug($"KeyNotFoundException: {knfEx}");
-            int code = 5;
-            if (knfEx.Message.StartsWith("TermId"))
-                code = 8;
-
-            return Ok(new BaseResponse
+            var decrypted = transaction.Account.DecryptParameter(privateKeyPath, privateKeyPass);
+            if (decrypted.IsError)
             {
-                Result = "Error",
-                ErrCode = code,
-                Description = TillabuyExtensions.Errors[code]
-            });
+                return (false, null, null, new BaseResponse
+                {
+                    Result = "Error",
+                    ErrCode = 14,
+                    Description = decrypted.Errors.Count > 0 ? decrypted.Errors[0].Description : TillabuyExtensions.Errors[14]
+                });
+            }
+            transaction.Account = decrypted.Value;
         }
-        catch (Exception ex)
+
+        return (true, transaction, service, null);
+    }
+
+    private bool TryResolveAgent(Dictionary<string, string> queryParams, out string? agentId, out BaseResponse? errorResponse)
+    {
+        agentId = null;
+        errorResponse = null;
+        if (!queryParams.TryGetValue("termid", out var termid) || string.IsNullOrWhiteSpace(termid))
         {
-            _logger.Debug($"Error: {ex}");
-            return StatusCode(500);
+            errorResponse = new BaseResponse { Result = "Error", ErrCode = 8, Description = TillabuyExtensions.Errors.GetValueOrDefault(8, "TermId required") };
+            return false;
         }
+        if (!_terminals.TryGetValue(termid, out var termKey))
+        {
+            errorResponse = new BaseResponse { Result = "Error", ErrCode = 8, Description = TillabuyExtensions.Errors.GetValueOrDefault(8, "Terminal not found") };
+            return false;
+        }
+        if (!_agents.TryGetValue(termKey, out var agent))
+        {
+            errorResponse = new BaseResponse { Result = "Error", ErrCode = 5, Description = TillabuyExtensions.Errors.GetValueOrDefault(5, "Agent not found") };
+            return false;
+        }
+        agentId = agent;
+        return true;
     }
 }

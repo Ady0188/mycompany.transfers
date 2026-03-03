@@ -1,4 +1,4 @@
-﻿namespace MyCompany.Transfers.Domain.Providers;
+namespace MyCompany.Transfers.Domain.Providers;
 
 public enum ProviderResultKind
 {

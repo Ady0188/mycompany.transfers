@@ -1,5 +1,9 @@
-﻿namespace MyCompany.Transfers.Infrastructure.Helpers;
+namespace MyCompany.Transfers.Infrastructure.Helpers;
 
+/// <summary>
+/// Валюта для шаблонов провайдеров (код alpha3/numeric, scale и т.д.).
+/// Полная копия логики из оригинального проекта.
+/// </summary>
 internal sealed class Currency : IFormattable
 {
     public string Alpha3 { get; }
@@ -54,15 +58,19 @@ internal sealed class Currency : IFormattable
     public override string ToString() => Alpha3;
 }
 
+/// <summary>
+/// Страна для шаблонов провайдеров (alpha2/alpha3/numeric).
+/// Полная копия логики из оригинального проекта.
+/// </summary>
 internal sealed class Country : IFormattable
 {
     public string Alpha2 { get; }
     public string Alpha3 { get; }
     public string Numeric { get; }
-    
+
     public Country(string alpha2)
     {
-        Alpha2 = alpha2.ToUpperInvariant();
+        Alpha2 = (alpha2 ?? string.Empty).ToUpperInvariant();
 
         (Alpha3, Numeric) = Alpha2 switch
         {
@@ -120,16 +128,15 @@ internal sealed class Country : IFormattable
         };
     }
 
-    public string ToString(string? format, IFormatProvider? formatProvider)
-    {
-        return format?.ToLowerInvariant() switch
+    public string ToString(string? format, IFormatProvider? formatProvider) =>
+        format?.ToLowerInvariant() switch
         {
             null or "alpha2" => Alpha2,
             "alpha3" => Alpha3,
             "numeric" => Numeric,
             _ => throw new FormatException($"Unsupported country format: {format}")
         };
-    }
 
     public override string ToString() => Alpha2;
 }
+

@@ -1,4 +1,4 @@
-﻿namespace MyCompany.Transfers.Application.Common.Interfaces;
+namespace MyCompany.Transfers.Application.Common.Interfaces;
 
 public interface ICurrencyConverter
 {

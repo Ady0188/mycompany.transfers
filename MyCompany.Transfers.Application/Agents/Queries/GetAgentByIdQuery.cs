@@ -1,27 +1,24 @@
-﻿using ErrorOr;
+using ErrorOr;
+using MediatR;
+using MyCompany.Transfers.Application.Common.Helpers;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Domain.Agents;
-using MediatR;
 
 namespace MyCompany.Transfers.Application.Agents.Queries;
 
-public sealed record GetAgentByIdQuery(string AgentId): IRequest<ErrorOr<Agent>>;
-public class GetAgentByIdQueryHandler : IRequestHandler<GetAgentByIdQuery, ErrorOr<Agent>>
+public sealed record GetAgentByIdQuery(string AgentId) : IRequest<ErrorOr<Agent>>;
+
+public sealed class GetAgentByIdQueryHandler : IRequestHandler<GetAgentByIdQuery, ErrorOr<Agent>>
 {
     private readonly IAgentReadRepository _read;
 
-    public GetAgentByIdQueryHandler(IAgentReadRepository read)
-    {
-        _read = read;
-    }
+    public GetAgentByIdQueryHandler(IAgentReadRepository read) => _read = read;
 
-    public async Task<ErrorOr<Agent>> Handle(GetAgentByIdQuery request, CancellationToken cancellationToken)
+    public async Task<ErrorOr<Agent>> Handle(GetAgentByIdQuery request, CancellationToken ct)
     {
-        var agent = await _read.GetByIdAsync(request.AgentId, cancellationToken);
-
+        var agent = await _read.GetByIdAsync(request.AgentId, ct);
         if (agent is null)
-            return Error.NotFound();
-
+            return AppErrors.Agents.NotFound(request.AgentId);
         return agent;
     }
 }

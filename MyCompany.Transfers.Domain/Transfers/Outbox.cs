@@ -1,4 +1,4 @@
-﻿using MyCompany.Transfers.Domain.Common;
+using MyCompany.Transfers.Domain.Common;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Services;
 
@@ -13,7 +13,7 @@ public sealed class Outbox : IAggregateRoot
     public string TerminalId { get; private set; } = default!;
     public string ExternalId { get; private set; } = default!;
     public string ServiceId { get; private set; } = default!;
-    public string ProviderServicveId { get; private set; } = default!;
+    public string ProviderServiceId { get; private set; } = default!;
     public string ProviderId { get; private set; } = default!;
     public TransferMethod Method { get; private set; }
     public string Account { get; private set; } = default!;
@@ -59,23 +59,22 @@ public sealed class Outbox : IAggregateRoot
             PreparedAtUtc = t.PreparedAtUtc,
             ProviderId = service.ProviderId,
             Source = source,
-            ProviderServicveId = service.ProviderServicveId
+            ProviderServiceId = service.ProviderServiceId
         };
-
-        foreach (var kv in t.Parameters) o._parameters[kv.Key] = kv.Value;
-        
+        foreach (var kv in t.Parameters)
+            o._parameters[kv.Key] = kv.Value;
         return o;
     }
-    
-    public void SetReceivedParams(IReadOnlyDictionary<string, string> receivedParamas)
+
+    public void SetReceivedParams(IReadOnlyDictionary<string, string> receivedParams)
     {
-        foreach (var kv in receivedParamas) _provReceivedParams[kv.Key] = kv.Value;
+        foreach (var kv in receivedParams)
+            _provReceivedParams[kv.Key] = kv.Value;
     }
 
     public void MarkCompleted(DateTimeOffset now, OutboxStatus status)
     {
         if (Status == OutboxStatus.SUCCESS || Status == OutboxStatus.FAILED) return;
-        
         Status = status;
         CompletedAtUtc = now;
     }
@@ -91,16 +90,13 @@ public sealed class Outbox : IAggregateRoot
         ProviderCode = providerCode;
         ErrorDescription = description;
         ProviderTransferId = providerTransferId;
-
         Status = status;
+        if (kind == ProviderResultKind.Success || kind == ProviderResultKind.Error || kind == ProviderResultKind.Technical)
+            CompletedAtUtc = now;
+    }
 
-        if (kind == ProviderResultKind.Success)
-        {
-            CompletedAtUtc = now;
-        }
-        else if (kind == ProviderResultKind.Error || kind == ProviderResultKind.Technical)
-        {
-            CompletedAtUtc = now;
-        }
+    public void ApplySentToAbsResult(OutboxStatus status)
+    {
+        Status = status;
     }
 }

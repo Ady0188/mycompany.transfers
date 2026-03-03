@@ -1,4 +1,4 @@
-﻿namespace MyCompany.Transfers.Contract.Core.Requests;
+namespace MyCompany.Transfers.Contract.Core.Requests;
 
 public enum TransferMethod
 {

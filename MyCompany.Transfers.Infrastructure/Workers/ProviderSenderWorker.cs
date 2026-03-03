@@ -1,25 +1,20 @@
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
+using MyCompany.Transfers.Domain.Agents;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
-using MyCompany.Transfers.Infrastructure.Repositories;
-using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace MyCompany.Transfers.Infrastructure.Workers;
-
-internal class ProviderSenderWorker : BackgroundService
+internal sealed class ProviderSenderWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<ProviderSenderWorker> _logger;
 
-    public ProviderSenderWorker(IServiceScopeFactory scopeFactory, ILogger<ProviderSenderWorker> logger)
+    public ProviderSenderWorker(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory;
-        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -34,40 +29,46 @@ internal class ProviderSenderWorker : BackgroundService
                 var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
                 var transferRepository = scope.ServiceProvider.GetRequiredService<ITransferRepository>();
                 var agentRepository = scope.ServiceProvider.GetRequiredService<IAgentReadRepository>();
+                var balanceHistoryRepository = scope.ServiceProvider.GetRequiredService<IAgentBalanceHistoryRepository>();
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                 var pending = await outboxRepository.GetPendingsAsync();
 
-                if (pending.Count == 0)
-                {
-                    _logger.LogDebug("ProviderSenderWorker: no pending outbox messages.");
-                    await Task.Delay(5000, stoppingToken);
-                    continue;
-                }
-
-                _logger.LogDebug("ProviderSenderWorker: processing {Count} pending outbox messages.", pending.Count);
-
                 if (pending.Count > 0)
-                    await ProcessBatchAsync(pending, providerRepo, providerService, transferRepository, outboxRepository, agentRepository, unitOfWork, stoppingToken);
+                {
+                    await ProcessBatchAsync(
+                        pending,
+                        providerRepo,
+                        providerService,
+                        transferRepository,
+                        outboxRepository,
+                        agentRepository,
+                        balanceHistoryRepository,
+                        unitOfWork,
+                        stoppingToken);
 
-                // небольшая пауза после обработки, чтобы не крутиться слишком агрессивно
-                await Task.Delay(1000, stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                }
+                else
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "ProviderSenderWorker: error in main loop");
-                await Task.Delay(5000, stoppingToken);
+                // В случае ошибки даём паузу и пробуем снова
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
     }
 
-    private async Task ProcessBatchAsync(List<Outbox> pending,
+    private static async Task ProcessBatchAsync(
+        List<Outbox> pending,
         IProviderRepository providerRepo,
         IProviderService providerService,
         ITransferRepository transferRepository,
         IOutboxRepository outboxRepository,
         IAgentReadRepository agentRepository,
-        IUnitOfWork unitOfWork, 
+        IAgentBalanceHistoryRepository balanceHistoryRepository,
+        IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
         const int maxDegreeOfParallelism = 10;
@@ -78,36 +79,26 @@ internal class ProviderSenderWorker : BackgroundService
             await semaphore.WaitAsync(ct);
             try
             {
-                await ProcessMessageAsync(outbox, providerRepo, providerService, transferRepository, outboxRepository, agentRepository, unitOfWork, ct);
+                await ProcessMessageAsync(
+                    outbox,
+                    providerRepo,
+                    providerService,
+                    transferRepository,
+                    outboxRepository,
+                    agentRepository,
+                    balanceHistoryRepository,
+                    unitOfWork,
+                    ct);
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "ProviderSenderWorker: error while processing Outbox {TransferId}", outbox.TransferId);
-
-                // Здесь мы хотим гарантированно зафиксировать ошибку для конкретного сообщения Outbox:
-                // отдельно открываем транзакцию и обновляем статус сообщения.
-                try
-                {
-                    await unitOfWork.ExecuteTransactionalAsync(async _ =>
-                    {
-                        outbox.ApplyProviderResult(
-                            DateTimeOffset.UtcNow,
-                            outbox.ProviderCode ?? "WORKER_ERROR",
-                            ex.Message,
-                            null,
-                            ProviderResultKind.Error,
-                            OutboxStatus.FAILED);
-
-                        outboxRepository.Update(outbox);
-                        return true;
-                    }, ct);
-                }
-                catch (Exception txEx)
-                {
-                    // Если даже запись статуса в БД не удалась — просто залогируем,
-                    // чтобы не зациклиться на одном и том же сообщении.
-                    _logger.LogError(txEx, "ProviderSenderWorker: failed to persist FAILED status for Outbox {TransferId}", outbox.TransferId);
-                }
+                outbox.ApplyProviderResult(
+                    DateTimeOffset.UtcNow,
+                    outbox.ProviderCode ?? "UNKNOWN",
+                    "Unexpected worker error",
+                    null,
+                    ProviderResultKind.Error,
+                    OutboxStatus.FAILED);
             }
             finally
             {
@@ -118,90 +109,82 @@ internal class ProviderSenderWorker : BackgroundService
         await Task.WhenAll(tasks);
     }
 
-    private async Task ProcessMessageAsync(
-    Outbox msg,
-    IProviderRepository providerRepo,
-    IProviderService providerService,
-    ITransferRepository transferRepository,
-    IOutboxRepository outboxRepository,
-    IAgentReadRepository agentRepository,
-    IUnitOfWork unitOfWork,
-    CancellationToken ct)
+    private static async Task ProcessMessageAsync(
+        Outbox msg,
+        IProviderRepository providerRepo,
+        IProviderService providerService,
+        ITransferRepository transferRepository,
+        IOutboxRepository outboxRepository,
+        IAgentReadRepository agentRepository,
+        IAgentBalanceHistoryRepository balanceHistoryRepository,
+        IUnitOfWork unitOfWork,
+        CancellationToken ct)
     {
         await unitOfWork.ExecuteTransactionalAsync(async _ =>
         {
-            // 1. Обновляем статус outbox-сообщения на Processing
-            //var msg = await outboxRepository.GetForUpdateAsync(t.TransferId, ct);
-            //if (msg == null || msg.IsProcessed)
-            //    return false; // уже кто-то обработал
-
-            //msg.MarkProcessing();
-
             var provider = await providerRepo.GetAsync(msg.ProviderId, ct);
-
-            ProviderResult providerResult;
-
             if (provider is null)
+                return false;
+
+            var settings = provider.SettingsJson.Deserialize<ProviderSettings>()
+                           ?? new ProviderSettings();
+
+            var providerResult = new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), null);
+
+            if (settings.JobScenario.Count == 0)
             {
-                _logger.LogError("ProviderSenderWorker: provider '{ProviderId}' not found for Outbox {TransferId}", msg.ProviderId, msg.TransferId);
                 providerResult = new ProviderResult(
-                    OutboxStatus.FAILED,
-                    new Dictionary<string, string> { ["errorCode"] = "PROVIDER_NOT_FOUND" },
-                    $"Provider '{msg.ProviderId}' not found");
+                    OutboxStatus.SETTING,
+                    new Dictionary<string, string>(),
+                    $"No job scenarios configured for provider '{provider.Id}'");
+            }
+
+            var operation = settings.JobScenario.TryGetValue(msg.Status, out var op) ? op : null;
+
+            if (operation is null)
+            {
+                providerResult = new ProviderResult(
+                    OutboxStatus.SETTING,
+                    new Dictionary<string, string>(),
+                    $"Operation '{operation}' not configured for provider '{provider.Id}'");
             }
             else
             {
-                var settings = provider.SettingsJson.Deserialize<ProviderSettings>()
-                               ?? new ProviderSettings();
+                var providerRequest = new ProviderRequest(
+                    Source: msg.Source,
+                    SourceAccount: string.Empty,
+                    SourceCurrency: msg.CurrentQuote!.Total.Currency,
+                    Destination: string.Empty,
+                    DestinationAccount: string.Empty,
+                    Operation: operation,
+                    TransferId: msg.TransferId.ToString(),
+                    NumId: msg.NumId,
+                    ExternalId: msg.ExternalId,
+                    ServiceId: msg.ServiceId,
+                    msg.ProviderServiceId,
+                    Account: msg.Account,
+                    SourceAmount: 0,
+                    SourceFeeAmount: 0,
+                    TotalAmount: 0,
+                    CreditAmount: msg.CurrentQuote!.CreditedAmount.Minor,
+                    ProviderFee: msg.CurrentQuote!.ProviderFee.Minor,
+                    CurrencyIsoCode: msg.CurrentQuote!.CreditedAmount.Currency,
+                    ExchangeRate: 0,
+                    Proc: "",
+                    Parameters: msg.Parameters,
+                    ProvReceivedParams: msg.ProvReceivedParams,
+                    TransferDateTime: msg.CreatedAtUtc);
 
-                providerResult = new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), null);
-                if (settings.JobScenario.Count() == 0)
-                {
-                    providerResult = new ProviderResult(
-                        OutboxStatus.SETTING,
-                        new Dictionary<string, string>(),
-                        $"No job scenarios configured for provider '{provider.Id}'");
-                }
-
-                var operation = settings.JobScenario.TryGetValue(msg.Status, out var op) ? op : null;
-
-                if (operation is null)
-                {
-                    providerResult = new ProviderResult(
-                        OutboxStatus.SETTING,
-                        new Dictionary<string, string>(),
-                        $"Operation '{operation}' not configured for provider '{provider.Id}'");
-                }
-                else
-                {
-                    // Готовим ProviderRequest из payload
-                    var providerRequest = new ProviderRequest(
-                        msg.Source,
-                        operation,
-                        msg.TransferId.ToString(),
-                        msg.NumId,
-                        msg.ExternalId,
-                        msg.ServiceId,
-                        msg.ProviderServicveId,
-                        msg.Account,
-                        msg.CurrentQuote!.CreditedAmount.Minor,
-                        msg.CurrentQuote!.ProviderFee.Minor,
-                        msg.CurrentQuote!.CreditedAmount.Currency,
-                        "",
-                        msg.Parameters,
-                        msg.ProvReceivedParams,
-                        msg.CreatedAtUtc);
-
-                    // Вызов провайдера
-                    providerResult = await providerService.SendAsync(
-                        msg.ProviderId,
-                        providerRequest,
-                        ct);
-                }
+                providerResult = await providerService.SendAsync(
+                    msg.ProviderId,
+                    providerRequest,
+                    ct);
             }
 
-            // Находим Transfer и применяем результат
-            var transfer = (await transferRepository.GetByIdAsync(msg.TransferId, ct))!;
+            var transfer = await transferRepository.GetByIdAsync(msg.TransferId, ct);
+            if (transfer is null)
+                return false;
+
             var nowUtc = DateTimeOffset.UtcNow;
 
             if (providerResult.Status == OutboxStatus.SUCCESS)
@@ -256,8 +239,10 @@ internal class ProviderSenderWorker : BackgroundService
                     kind: ProviderResultKind.Technical,
                     status: providerResult.Status);
             }
-            
-            if (providerResult.Status == OutboxStatus.FAILED || providerResult.Status == OutboxStatus.FRAUD || providerResult.Status == OutboxStatus.EXPIRED)
+
+            if (providerResult.Status == OutboxStatus.FAILED ||
+                providerResult.Status == OutboxStatus.FRAUD ||
+                providerResult.Status == OutboxStatus.EXPIRED)
             {
                 var prvCode = providerResult.ResponseFields.TryGetValue("errorCode", out var c) ? c : "UNKNOWN";
 
@@ -278,12 +263,31 @@ internal class ProviderSenderWorker : BackgroundService
                     status: trnSts);
 
                 var agent = await agentRepository.GetForUpdateSqlAsync(transfer.AgentId, ct);
-
-                agent!.Credit(transfer.CurrentQuote.Total.Currency, transfer.CurrentQuote.Total.Minor);
+                if (agent is not null)
+                {
+                    var totalRefund = transfer.CurrentQuote!.Total;
+                    var refundRefId = $"{transfer.Id}:Refund";
+                    var alreadyRefunded = await balanceHistoryRepository.ExistsByReferenceAsync(agent.Id, totalRefund.Currency, BalanceHistoryReferenceType.Transfer, refundRefId, ct);
+                    if (!alreadyRefunded)
+                    {
+                        var currentBalance = agent.Balances.TryGetValue(totalRefund.Currency, out var cr) ? cr : 0L;
+                        agent.Credit(totalRefund.Currency, totalRefund.Minor);
+                        var newBalance = agent.Balances.TryGetValue(totalRefund.Currency, out var up) ? up : currentBalance + totalRefund.Minor;
+                        var refundHistory = AgentBalanceHistory.CreateForTransfer(
+                            agent.Id,
+                            refundRefId,
+                            nowUtc.UtcDateTime,
+                            totalRefund.Currency,
+                            currentBalance,
+                            totalRefund.Minor,
+                            newBalance);
+                        balanceHistoryRepository.Add(refundHistory);
+                    }
+                }
             }
 
-            // Коммитим
             return true;
         }, ct);
     }
 }
+

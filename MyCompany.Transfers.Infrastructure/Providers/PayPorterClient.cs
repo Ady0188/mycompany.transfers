@@ -1,258 +1,280 @@
-﻿using MyCompany.Transfers.Application.Common.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
 using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
+using MyCompany.Transfers.Infrastructure.Providers.Responses.IPS;
 using MyCompany.Transfers.Infrastructure.Providers.Responses.PayPorter;
-using Microsoft.Extensions.DependencyInjection;
-using NLog;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 
-internal sealed class PayProrterClient : IProviderClient
+public sealed class PayPorterClient : IProviderClient
 {
+    private readonly ILogger<PayPorterClient> _logger;
     public string ProviderId => "PayPorter";
-    private Logger _logger = LogManager.GetCurrentClassLogger();
-
     private readonly IHttpClientFactory _httpFactory;
-    private readonly IProviderTokenService _providerTokenService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public PayProrterClient(IHttpClientFactory httpFactory, IServiceScopeFactory scopeFactory)
+    public PayPorterClient(IHttpClientFactory httpFactory, IServiceScopeFactory scopeFactory, ILogger<PayPorterClient> logger)
     {
-        using var scope = scopeFactory.CreateScope();
-        _providerTokenService = scope.ServiceProvider.GetRequiredService<IProviderTokenService>();
-
         _httpFactory = httpFactory;
+        _scopeFactory = scopeFactory;
+        _logger = logger;
     }
 
     public async Task<ProviderResult> SendAsync(Provider provider, ProviderRequest request, CancellationToken ct)
     {
-        var settings = provider.SettingsJson.Deserialize<ProviderSettings>()
-                       ?? new ProviderSettings();
+        using var scope = _scopeFactory.CreateScope();
+        var tokenService = scope.ServiceProvider.GetRequiredService<IProviderTokenService>();
 
-
+        var settings = provider.SettingsJson.Deserialize<ProviderSettings>();// JsonSerializer.Deserialize<ProviderSettings>(provider.SettingsJson) ?? new ProviderSettings();
         var http = _httpFactory.CreateClient("base");
         http.BaseAddress = new Uri(provider.BaseUrl);
         http.DefaultRequestHeaders.Add("serviceName", "payporter");
 
         if (!settings.Operations.TryGetValue(request.Operation, out var op))
-        {
             return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
                 $"Operation '{request.Operation}' not configured for provider '{provider.Id}'");
-        }
 
-        var token = await _providerTokenService.GetAccessTokenAsync(provider.Id, ct);
+        var token = await tokenService.GetAccessTokenAsync(provider.Id, ct) ?? settings.Common["token"];
         if (!string.IsNullOrWhiteSpace(token))
-            SetBearer(http, token);
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var result = new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), null);
-        if (request.Operation.ToLower() == "create")
-        {
-            if (!settings.Operations.TryGetValue("exchange", out var exchangeOperation))
-            {
-                return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
-                    $"Operation 'exchange' not configured for provider '{provider.Id}'");
-            }
 
-            result = await ExchangeAsync(http, request, provider.Id, settings, ct);
+        var opName = request.Operation.ToLowerInvariant();
+        if (opName == "exchange")
+            return await ExchangeAsync(http, request, provider.Id, settings, tokenService, ct);
+        if (opName == "create")
+            return await CreateAsync(http, request, provider.Id, settings, tokenService, ct);
+        if (opName == "status")
+            return await StatusAsync(http, request, provider.Id, settings, tokenService, ct);
 
-            if (!result.ResponseFields.TryGetValue("exchangeId", out var exchangeId))
-            {
-                return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(),
-                    $"No exchangeId returned from exchange operation for provider '{provider.Id}'");
-            }
+        return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
+            $"Operation '{request.Operation}' not configured");
 
-            if (result.Status == OutboxStatus.SUCCESS)
-                result = await CreateAsync(http, request, exchangeId, provider.Id, settings, ct);
 
-        }
-        else if (request.Operation.ToLower() == "status")
-            result = await StatusAsync(http, request, provider.Id, settings, ct);
+        //if (string.Equals(request.Operation, "exchange", StringComparison.OrdinalIgnoreCase))
+        //{
+        //    var exchangeResult = await ExchangeAsync(http, request, provider.Id, settings, tokenService, ct);
 
-        return result;
+        //    if (exchangeResult.Status != OutboxStatus.SENDING)
+        //        return exchangeResult;
+            
+        //    if (!exchangeResult.ResponseFields.TryGetValue("exchangeId", out var exchangeId))
+        //        return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(),
+        //            "No exchangeId from exchange operation");
+
+
+        //    return exchangeResult;
+        //}
+
+        //if (string.Equals(request.Operation, "create", StringComparison.OrdinalIgnoreCase))
+        //{
+        //    if (!settings.Operations.TryGetValue("exchange", out _))
+        //        return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
+        //            $"Operation 'exchange' not configured for provider '{provider.Id}'");
+
+        //    var exchangeResult = await ExchangeAsync(http, request, provider.Id, settings, tokenService, ct);
+
+        //    if (exchangeResult.Status != OutboxStatus.SENDING)
+        //        return exchangeResult;
+            
+        //    if (!exchangeResult.ResponseFields.TryGetValue("exchangeId", out var exchangeId))
+        //        return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(),
+        //            "No exchangeId from exchange operation");
+
+        //    if (exchangeResult.Status == OutboxStatus.SENDING)
+        //        return await CreateAsync(http, request, exchangeId, provider.Id, settings, tokenService, ct);
+
+        //    return exchangeResult;
+        //}
+
+        //if (string.Equals(request.Operation, "status", StringComparison.OrdinalIgnoreCase))
+        //    return await StatusAsync(http, request, provider.Id, settings, tokenService, ct);
+
+        //return new ProviderResult(OutboxStatus.SETTING, new Dictionary<string, string>(),
+        //    $"Unsupported operation '{request.Operation}'");
     }
 
-    public async Task<ProviderResult> ExchangeAsync(HttpClient http, ProviderRequest request, string providerId, ProviderSettings pSettings, CancellationToken ct)
+    private async Task<ProviderResult> ExchangeAsync(HttpClient http, ProviderRequest request, string providerId, ProviderSettings pSettings, IProviderTokenService tokenService, CancellationToken ct)
     {
-        var settings = pSettings.Operations["exchange"];
-
+        var op = pSettings.Operations["exchange"];
         var replacements = request.BuildReplacements();
-        var body = settings.BodyTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
+        var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
 
-        StringContent content = new StringContent(body, Encoding.UTF8, "application/json");
+        _logger.LogInformation($"Exchange request: {body}");
 
-        var response = await http.PostAsync(settings.PathTemplate, content);
+        var content = new StringContent(body, Encoding.UTF8, "application/json");
+        var response = await http.PostAsync(op.PathTemplate, content, ct);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-        {
-            var token = await _providerTokenService.RefreshOn401Async(
-                providerId,
-                loginFunc: async innerCt =>
-                {
-                    return await LoginAsync(http, pSettings, innerCt);
-                },
-                ct);
+        var responseContent = await response.Content.ReadAsStringAsync(ct);
 
-            SetBearer(http, token);
+        _logger.LogInformation($"Exchange response: {responseContent}, HttpsStatus: {response.StatusCode}");
 
-            response = await http.PostAsync(settings.PathTemplate, content);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
-        }
-
-        var responseContent = await response.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<ExchangeResponse>(responseContent);
-        if (result == null) 
-            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response from provider");
 
-        var dict = new Dictionary<string, string>
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+            (result is not null && !result.Header.Success && result.Header.Message.Contains("LOGOUT")))
         {
-            { "exchangeId", result.ResponseObject.ExchangeId },
-            { "exchangeRate", result.ResponseObject.ExchangeRate.ToString() }
-        };
+            var token = await tokenService.RefreshOn401Async(providerId,
+                innerCt => LoginAsync(http, pSettings, innerCt), ct);
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            content = new StringContent(body, Encoding.UTF8, "application/json");
+            response = await http.PostAsync(op.PathTemplate, content, ct);
 
-        var status = result.Header.Success ? OutboxStatus.SUCCESS : OutboxStatus.FAILED;
-        return new ProviderResult(status, dict, result.Header.Message);
-    }
+            responseContent = await response.Content.ReadAsStringAsync(ct);
 
-    public async Task<ProviderResult> CreateAsync(HttpClient http, ProviderRequest request, string providerId, string exchangeId, ProviderSettings pSettings, CancellationToken ct)
-    {
-        var settings = pSettings.Operations["create"];
-
-        var dict = request.Parameters.ToDictionary();
-        dict.Add("ExchangeId", exchangeId);
-
-        var replacements = request.BuildReplacements(dict);
-        var body = settings.BodyTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
-
-        StringContent content = new StringContent(body, Encoding.UTF8, "application/json");
-
-        var response = await http.PostAsync(settings.PathTemplate, content);
-
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-        {
-            var token = await _providerTokenService.RefreshOn401Async(
-                providerId,
-                loginFunc: async innerCt =>
-                {
-                    return await LoginAsync(http, pSettings, innerCt);
-                },
-                ct);
-
-            SetBearer(http, token);
-
-            response = await http.PostAsync(settings.PathTemplate, content);
+            _logger.LogInformation($"Exchange response retry: {responseContent}, HttpsStatus: {response.StatusCode}");
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
+
+            result = JsonSerializer.Deserialize<ExchangeResponse>(responseContent);
         }
 
-        var responseContent = await response.Content.ReadAsStringAsync();
-        var result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
-        if (result == null) 
-            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response from provider");
+        if (result is null)
+            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response");
 
-        var status = result.Header.Success ? OutboxStatus.SUCCESS : OutboxStatus.FAILED;
-        return new ProviderResult(status, new Dictionary<string, string>(), result.Header.Message);
+        var dict = new Dictionary<string, string>();
+        if (!result.Header.Success)
+        {
+            dict["errorCode"] = result.Header.Message ?? "EXCHANGE_FAILED";
+            return new ProviderResult(OutboxStatus.FAILED, dict, result.Header.Message);
+        }
+
+        dict["exchangeId"] = result.ResponseObject.ExchangeId;
+        dict["exchangeRate"] = result.ResponseObject.ExchangeRate.ToString();
+
+        return new ProviderResult(OutboxStatus.SENDING, dict, null);
     }
 
-    public async Task<ProviderResult> StatusAsync(HttpClient http, ProviderRequest request, string providerId, ProviderSettings pSettings, CancellationToken ct)
+    private async Task<ProviderResult> CreateAsync(HttpClient http, ProviderRequest request, /*string exchangeId,*/ string providerId, ProviderSettings pSettings, IProviderTokenService tokenService, CancellationToken ct)
     {
-        var settings = pSettings.Operations["status"];
+        var op = pSettings.Operations["create"];
+        var dict = request.Parameters is not null
+            ? new Dictionary<string, string>(request.Parameters, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        //dict["ExchangeId"] = exchangeId;
+        var replacements = request.BuildReplacements(dict);
+        var body = op.BodyTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
 
+        _logger.LogInformation($"Create request: {body}");
+
+        var content = new StringContent(body, Encoding.UTF8, "application/json");
+        var response = await http.PostAsync(op.PathTemplate, content, ct);
+
+        var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+        _logger.LogInformation($"Create response: {responseContent}, HttpsStatus: {response.StatusCode}");
+
+        var result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+            (result is not null && !result.Header.Success && result.Header.Message.Contains("LOGOUT")))
+        {
+            var token = await tokenService.RefreshOn401Async(providerId,
+                innerCt => LoginAsync(http, pSettings, innerCt), ct);
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            content = new StringContent(body, Encoding.UTF8, "application/json");
+            response = await http.PostAsync(op.PathTemplate, content, ct);
+
+            responseContent = await response.Content.ReadAsStringAsync(ct);
+            
+            _logger.LogInformation($"Create response retry: {responseContent}, HttpsStatus: {response.StatusCode}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
+
+            result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+        }
+        
+        if (result is null)
+            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response");
+
+        var resultDict = new Dictionary<string, string>();
+        if (!result.Header.Success)
+        {
+            resultDict["errorCode"] = result.Header.Message ?? "CREATE_FAILED";
+            return new ProviderResult(OutboxStatus.FAILED, resultDict, result.Header.Message);
+        }
+
+        return new ProviderResult(OutboxStatus.STATUS, resultDict, null);
+    }
+
+    private async Task<ProviderResult> StatusAsync(HttpClient http, ProviderRequest request, string providerId, ProviderSettings pSettings, IProviderTokenService tokenService, CancellationToken ct)
+    {
+        var op = pSettings.Operations["status"];
         var replacements = request.BuildReplacements();
-        var path = settings.PathTemplate!.ApplyTemplate(replacements, encodeValues: false, new Dictionary<string, string>());
+        var path = op.PathTemplate!.ApplyTemplate(replacements, false, new Dictionary<string, string>());
+
+        _logger.LogInformation($"Status request: {path}");
 
         var response = await http.GetAsync(path, ct);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+        _logger.LogInformation($"Status response: {responseContent}, HttpsStatus: {response.StatusCode}");
+
+        var result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+            (result is not null && !result.Header.Success && result.Header.Message.Contains("LOGOUT")))
         {
-            var token = await _providerTokenService.RefreshOn401Async(
-                providerId,
-                loginFunc: async innerCt =>
-                {
-                    return await LoginAsync(http, pSettings, innerCt);
-                },
-                ct);
-
-            SetBearer(http, token);
-
+            var token = await tokenService.RefreshOn401Async(providerId,
+                innerCt => LoginAsync(http, pSettings, innerCt), ct);
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             response = await http.GetAsync(path, ct);
+
+            responseContent = await response.Content.ReadAsStringAsync(ct);
+
+            _logger.LogInformation($"Status response retry: {responseContent}, HttpsStatus: {response.StatusCode}");
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
+
+            result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
         }
+        
+        if (result is null)
+            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response");
 
-        var responseContent = await response.Content.ReadAsStringAsync();
-        var result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
-        if (result == null) 
-            return new ProviderResult(OutboxStatus.NORESPONSE, new Dictionary<string, string>(), "Invalid response from provider");
+        var statusDict = new Dictionary<string, string>();
+        if (!result.Header.Success)
+        {
+            statusDict["errorCode"] = result.Header.Message ?? "STATUS_FAILED";
+            return new ProviderResult(OutboxStatus.FAILED, statusDict, result.Header.Message);
+        }
+        var status = OutboxStatus.SUCCESS;
+        if (result.ResponseObject?.Status?.StatusCode is int code && code is not 0 and > 0)
+            status = OutboxStatus.STATUS;
 
-        var status = result.Header.Success ? OutboxStatus.SUCCESS : OutboxStatus.FAILED;
-        return new ProviderResult(status, new Dictionary<string, string>(), result.Header.Message);
+        return new ProviderResult(status, statusDict, null);
     }
 
-    private static void SetBearer(HttpClient http, string token)
+    private async Task<(string accessToken, DateTimeOffset? expiresAtUtc)> LoginAsync(HttpClient http, ProviderSettings settings, CancellationToken ct)
     {
-        http.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-    }
+        _logger.LogInformation($"Login request");
 
-    private async Task<(string accessToken, DateTimeOffset? expiresAtUtc)> LoginAsync(
-    HttpClient http,
-    ProviderSettings settings,
-    CancellationToken ct)
-    {
         var data = new Dictionary<string, string>
         {
-            { "username", settings.User! },
-            { "password", settings.Password! }
+            ["username"] = settings.Common["user"] ?? "",
+            ["password"] = settings.Common["password"] ?? ""
         };
-
-        if (http.DefaultRequestHeaders.Authorization != null)
-            http.DefaultRequestHeaders.Authorization = null;
-
+        http.DefaultRequestHeaders.Authorization = null;
         var response = await http.PostAsync("online/oauth-login", new FormUrlEncodedContent(data), ct);
         var content = await response.Content.ReadAsStringAsync(ct);
 
+        _logger.LogInformation($"Login response: {content}, HttpsStatus: {response.StatusCode}");
+
         var tokenResp = JsonSerializer.Deserialize<TokenResponse>(content);
         if (tokenResp is null || !tokenResp.Header.Success || string.IsNullOrWhiteSpace(tokenResp.ResponseObject.AccessToken))
-            throw new Exception("Provider login failed");
+            throw new InvalidOperationException("Provider login failed");
 
-        // если expires нет — верни null
         return (tokenResp.ResponseObject.AccessToken, null);
     }
-
-    //private async Task AuthAsync(HttpClient http, string providerId, ProviderSettings settings, CancellationToken ct)
-    //{
-    //    var data = new Dictionary<string, string>
-    //    {
-    //        { "username", settings.User },
-    //        { "password", settings.Password }
-    //    };
-
-    //    var content = new FormUrlEncodedContent(data);
-
-    //    var response = await http.PostAsync("online/oauth-login", content);
-    //    var responseContent = await response.Content.ReadAsStringAsync();
-
-    //    TokenResponse? result = JsonSerializer.Deserialize<TokenResponse>(responseContent);
-    //    if (result is null || !result.Header.Success)
-    //        return;
-
-    //    settings.Token = result.ResponseObject.AccessToken;
-
-    //    using var scope = _scopeFactory.CreateScope();
-    //    var providerRepo = scope.ServiceProvider.GetRequiredService<IProviderRepository>();
-    //    var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-    //    var provider = (await providerRepo.GetAsync(providerId, ct))!;
-
-    //    provider.UpdateSettings(JsonSerializer.Serialize(settings));
-
-    //    await unitOfWork.CommitChangesAsync(ct);
-    //}
 }

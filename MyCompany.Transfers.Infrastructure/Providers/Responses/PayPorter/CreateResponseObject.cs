@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace MyCompany.Transfers.Infrastructure.Providers.Responses.PayPorter;
 
@@ -8,8 +8,5 @@ public class CreateResponseObject
     public long TransferOrderRefId { get; set; }
 
     [JsonPropertyName("status")]
-    public CreateStatus Status { get; set; }
-
-    [JsonPropertyName("senderExtFirmRefId")]
-    public string SenderExtFirmRefId { get; set; }
+    public CreateStatus? Status { get; set; }
 }
