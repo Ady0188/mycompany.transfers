@@ -37,28 +37,24 @@ public sealed class DashboardController : BaseController
     public async Task<IActionResult> GetOverview(CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
-        var today = now.Date;
-        var from14 = today.AddDays(-13);
-        var from7 = today.AddDays(-6);
+        var from14 = now.AddDays(-13);
+        var from7 = now.AddDays(-6);
+        var todayDate = now.UtcDateTime.Date;
 
         var filter14 = new TransfersCommonReportFilter(from14, now, null, null, null, null, null);
         var filter7 = new TransfersCommonReportFilter(from7, now, null, null, null, null, null);
 
-        var byPeriodTask = _mediator.Send(
+        // Важно: не выполнять несколько запросов к одному DbContext параллельно.
+        // Поэтому выполняем их последовательно, без Task.WhenAll.
+        var byPeriod = await _mediator.Send(
             new GetTransfersByPeriodReportQuery(filter14, TransfersReportGroupBy.Day, 1, TransfersReportLimits.ExportMaxRows),
             ct);
-        var revenueTask = _mediator.Send(
+        var revenue = await _mediator.Send(
             new GetTransfersRevenueReportQuery(filter14, TransfersReportGroupBy.Day, 1, TransfersReportLimits.ExportMaxRows),
             ct);
-        var byProviderTask = _mediator.Send(
+        var byProvider = await _mediator.Send(
             new GetTransfersByProviderReportQuery(filter7, 1, 20),
             ct);
-
-        await Task.WhenAll(byPeriodTask, revenueTask, byProviderTask);
-
-        var byPeriod = await byPeriodTask;
-        var revenue = await revenueTask;
-        var byProvider = await byProviderTask;
 
         var periodItems = byPeriod.Items.OrderBy(i => i.PeriodStart).ToList();
         var revenueItems = revenue.Items.OrderBy(i => i.PeriodStart).ToList();
@@ -73,7 +69,7 @@ public sealed class DashboardController : BaseController
             .Select(i => i.MarginMinor)
             .ToList();
 
-        var from7Date = today.AddDays(-6);
+        var from7Date = todayDate.AddDays(-6);
         var transfersLast7 = periodItems
             .Where(i => i.PeriodStart.Date >= from7Date)
             .Sum(i => i.TransfersCount);
@@ -83,7 +79,7 @@ public sealed class DashboardController : BaseController
         var revenueCurrency = revenueItems.FirstOrDefault()?.Currency ?? "TJS";
 
         var transfersToday = periodItems
-            .Where(i => i.PeriodStart.Date == today)
+            .Where(i => i.PeriodStart.Date == todayDate)
             .Sum(i => i.TransfersCount);
 
         var topProviders = byProvider.Items
