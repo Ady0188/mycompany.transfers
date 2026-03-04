@@ -1,11 +1,16 @@
 @page "/"
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IDashboardApiService DashboardApi
+@inject ISnackbar Snackbar
 
 <PageTitle>Главная — Админ-панель</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4 font-weight-medium" GutterBottom="true">
-    Добро пожаловать
-</MudText>
-<MudGrid>
+<MudStack Spacing="4">
+    <MudText Typo="Typo.h4" Class="mb-2 font-weight-medium" GutterBottom="true">
+        Добро пожаловать
+    </MudText>
+    <MudGrid>
         <MudItem xs="12" md="6">
             <MudCard Elevation="2" Class="pa-4">
                 <MudCardContent>
@@ -36,3 +41,119 @@
             </MudCard>
         </MudItem>
     </MudGrid>
+
+    <MudText Typo="Typo.h5" Class="mt-4 mb-2">Дашборд переводов</MudText>
+
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-3">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Переводы сегодня</MudText>
+                <MudText Typo="Typo.h5">@_overview.TransfersToday</MudText>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-3">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Переводы за 7 дней</MudText>
+                <MudText Typo="Typo.h5">@_overview.TransfersLast7Days</MudText>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-3">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Доход за 7 дней</MudText>
+                <MudText Typo="Typo.h5">@FormatMoney(_overview.RevenueLast7DaysMinor, _overview.RevenueCurrency)</MudText>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2" Class="pa-3">
+                <MudCardHeader>
+                    <MudText Typo="Typo.subtitle1">Динамика переводов за 14 дней</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_overview.Last14DaysLabels.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Нет данных для отображения.</MudText>
+                    }
+                    else
+                    {
+                        <MudChart ChartType="ChartType.Line"
+                                  ChartLabels="@_overview.Last14DaysLabels.ToArray()"
+                                  ChartSeries="@_last14DaysSeries" />
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-3">
+                <MudCardHeader>
+                    <MudText Typo="Typo.subtitle1">ТОП-5 провайдеров (7 дней)</MudText>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_overview.TopProvidersLabels.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Нет данных для отображения.</MudText>
+                    }
+                    else
+                    {
+                        <MudChart ChartType="ChartType.Bar"
+                                  ChartLabels="@_overview.TopProvidersLabels.ToArray()"
+                                  ChartSeries="@_topProvidersSeries" />
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private readonly DashboardOverviewModel _overview = new();
+    private List<ChartSeries<double>> _last14DaysSeries = new();
+    private List<ChartSeries<double>> _topProvidersSeries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var data = await DashboardApi.GetOverviewAsync();
+            _overview.TransfersToday = data.TransfersToday;
+            _overview.TransfersLast7Days = data.TransfersLast7Days;
+            _overview.RevenueLast7DaysMinor = data.RevenueLast7DaysMinor;
+            _overview.RevenueCurrency = data.RevenueCurrency;
+            _overview.Last14DaysLabels = data.Last14DaysLabels;
+            _overview.Last14DaysTransfers = data.Last14DaysTransfers;
+            _overview.Last14DaysRevenueMinor = data.Last14DaysRevenueMinor;
+            _overview.TopProvidersLabels = data.TopProvidersLabels;
+            _overview.TopProvidersCounts = data.TopProvidersCounts;
+
+            _last14DaysSeries = new List<ChartSeries<double>>
+            {
+                new()
+                {
+                    Name = "Переводы",
+                    Data = _overview.Last14DaysTransfers.Select(x => (double)x).ToArray()
+                }
+            };
+
+            _topProvidersSeries = new List<ChartSeries<double>>
+            {
+                new()
+                {
+                    Name = "Переводы",
+                    Data = _overview.TopProvidersCounts.Select(x => (double)x).ToArray()
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Не удалось загрузить дашборд: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string FormatMoney(long minor, string currency)
+    {
+        if (string.IsNullOrEmpty(currency)) return minor.ToString();
+        return $"{minor / 100m:N2} {currency}";
+    }
+}

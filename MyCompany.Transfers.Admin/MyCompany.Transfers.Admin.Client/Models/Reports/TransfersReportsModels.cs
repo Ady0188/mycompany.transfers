@@ -22,6 +22,9 @@ public sealed class TransfersReportFilterModel
     public DateTime? To { get; set; }
     public string? Status { get; set; }
     public string? AgentId { get; set; }
+    public string? ProviderId { get; set; }
+    public string? ServiceId { get; set; }
+    public string? AmountCurrency { get; set; }
     public TransfersReportGroupByClient GroupBy { get; set; } = TransfersReportGroupByClient.Day;
 }
 

@@ -12,7 +12,22 @@ public sealed record TransfersCommonReportFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     string? Status = null,
-    string? AgentId = null);
+    string? AgentId = null,
+    string? ProviderId = null,
+    string? ServiceId = null,
+    string? AmountCurrency = null);
+
+/// <summary>Ограничения для быстрых отчетов (чтобы не нагружать БД).</summary>
+public static class TransfersReportLimits
+{
+    /// <summary>Максимальный период в днях для одного запроса (снижает нагрузку на БД).</summary>
+    public const int MaxPeriodDays = 93;
+    /// <summary>Максимальный размер страницы при постраничной выборке.</summary>
+    public const int MaxPageSize = 200;
+    public const int DefaultPageSize = 50;
+    /// <summary>Максимум строк при экспорте в файл (CSV/Excel).</summary>
+    public const int ExportMaxRows = 5000;
+}
 
 public sealed record TransfersByPeriodReportItemDto(
     DateTime PeriodStart,

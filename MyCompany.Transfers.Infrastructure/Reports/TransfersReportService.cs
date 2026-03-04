@@ -21,7 +21,7 @@ public sealed class TransfersReportService : ITransfersReportService
     {
         var query = ApplyCommonFilter(_db.Transfers.AsNoTracking(), filter);
         var pageIndex = Math.Max(0, page - 1);
-        var size = pageSize <= 0 ? 10 : Math.Min(pageSize, 500);
+        var size = pageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(pageSize, TransfersReportLimits.MaxPageSize);
 
         if (groupBy == TransfersReportGroupBy.Month)
         {
@@ -154,7 +154,7 @@ public sealed class TransfersReportService : ITransfersReportService
 
         var totalCount = await grouped.CountAsync(ct);
         var pageIndex = Math.Max(0, page - 1);
-        var size = pageSize <= 0 ? 10 : Math.Min(pageSize, 500);
+        var size = pageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(pageSize, TransfersReportLimits.MaxPageSize);
         var itemsRaw = await grouped
             .Skip(pageIndex * size)
             .Take(size)
@@ -221,7 +221,7 @@ public sealed class TransfersReportService : ITransfersReportService
 
         var totalCount = await grouped.CountAsync(ct);
         var pageIndex = Math.Max(0, page - 1);
-        var size = pageSize <= 0 ? 10 : Math.Min(pageSize, 500);
+        var size = pageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(pageSize, TransfersReportLimits.MaxPageSize);
         var itemsRaw = await grouped
             .Skip(pageIndex * size)
             .Take(size)
@@ -268,7 +268,7 @@ public sealed class TransfersReportService : ITransfersReportService
     {
         var query = ApplyCommonFilter(_db.Transfers.AsNoTracking(), filter);
         var pageIndex = Math.Max(0, page - 1);
-        var size = pageSize <= 0 ? 10 : Math.Min(pageSize, 500);
+        var size = pageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(pageSize, TransfersReportLimits.MaxPageSize);
 
         if (groupBy == TransfersReportGroupBy.Month)
         {
@@ -352,7 +352,7 @@ public sealed class TransfersReportService : ITransfersReportService
         }
     }
 
-    private static IQueryable<Transfer> ApplyCommonFilter(IQueryable<Transfer> query, TransfersCommonReportFilter filter)
+    private IQueryable<Transfer> ApplyCommonFilter(IQueryable<Transfer> query, TransfersCommonReportFilter filter)
     {
         if (filter.From.HasValue)
             query = query.Where(t => t.CreatedAtUtc >= filter.From.Value);
@@ -368,7 +368,21 @@ public sealed class TransfersReportService : ITransfersReportService
             var aId = filter.AgentId.Trim();
             query = query.Where(t => t.AgentId == aId);
         }
-
+        if (!string.IsNullOrWhiteSpace(filter.ProviderId))
+        {
+            var pId = filter.ProviderId.Trim();
+            query = query.Where(t => _db.Services.Any(s => s.Id == t.ServiceId && s.ProviderId == pId));
+        }
+        if (!string.IsNullOrWhiteSpace(filter.ServiceId))
+        {
+            var sId = filter.ServiceId.Trim();
+            query = query.Where(t => t.ServiceId == sId);
+        }
+        if (!string.IsNullOrWhiteSpace(filter.AmountCurrency))
+        {
+            var cur = filter.AmountCurrency.Trim();
+            query = query.Where(t => t.Amount.Currency == cur);
+        }
         return query;
     }
 }

@@ -13,7 +13,7 @@ public sealed class GetTransfersByPeriodReportHandler
     public Task<TransfersReportResult<TransfersByPeriodReportItemDto>> Handle(GetTransfersByPeriodReportQuery request, CancellationToken ct)
     {
         var page = Math.Max(1, request.Page);
-        var size = request.PageSize <= 0 ? 10 : Math.Min(request.PageSize, 500);
+        var size = request.PageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(request.PageSize, TransfersReportLimits.MaxPageSize);
         return _reports.GetByPeriodAsync(request.Filter, request.GroupBy, page, size, ct);
     }
 }
@@ -28,7 +28,7 @@ public sealed class GetTransfersByAgentReportHandler
     public Task<TransfersReportResult<TransfersByAgentReportItemDto>> Handle(GetTransfersByAgentReportQuery request, CancellationToken ct)
     {
         var page = Math.Max(1, request.Page);
-        var size = request.PageSize <= 0 ? 10 : Math.Min(request.PageSize, 500);
+        var size = request.PageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(request.PageSize, TransfersReportLimits.MaxPageSize);
         return _reports.GetByAgentAsync(request.Filter, page, size, ct);
     }
 }
@@ -43,7 +43,7 @@ public sealed class GetTransfersByProviderReportHandler
     public Task<TransfersReportResult<TransfersByProviderReportItemDto>> Handle(GetTransfersByProviderReportQuery request, CancellationToken ct)
     {
         var page = Math.Max(1, request.Page);
-        var size = request.PageSize <= 0 ? 10 : Math.Min(request.PageSize, 500);
+        var size = request.PageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(request.PageSize, TransfersReportLimits.MaxPageSize);
         return _reports.GetByProviderAsync(request.Filter, page, size, ct);
     }
 }
@@ -58,7 +58,7 @@ public sealed class GetTransfersRevenueReportHandler
     public Task<TransfersReportResult<TransfersRevenueReportItemDto>> Handle(GetTransfersRevenueReportQuery request, CancellationToken ct)
     {
         var page = Math.Max(1, request.Page);
-        var size = request.PageSize <= 0 ? 10 : Math.Min(request.PageSize, 500);
+        var size = request.PageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(request.PageSize, TransfersReportLimits.MaxPageSize);
         return _reports.GetRevenueAsync(request.Filter, request.GroupBy, page, size, ct);
     }
 }
