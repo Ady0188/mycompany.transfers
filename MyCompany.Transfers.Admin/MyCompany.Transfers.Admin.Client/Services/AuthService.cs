@@ -121,6 +121,7 @@ public sealed class AuthService : IAuthService
         }
         catch (Exception ex)
         {
+            Console.Write(ex.ToString());
             return (false, ex.Message);
         }
     }

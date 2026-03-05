@@ -1,4 +1,4 @@
-using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
@@ -6,28 +6,42 @@ using MyCompany.Transfers.Domain.Providers;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Infrastructure.Helpers;
 using MyCompany.Transfers.Infrastructure.Providers.Responses.TBank;
+using System.Text;
 
 namespace MyCompany.Transfers.Infrastructure.Providers;
 
 public sealed class TBankClient : IProviderClient
 {
     public string ProviderId => "TBank";
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<TBankClient> _logger;
 
-    public TBankClient(IHttpClientFactory httpFactory, ILogger<TBankClient> logger)
+    public TBankClient(IHttpClientFactory httpFactory, ILogger<TBankClient> logger, IServiceScopeFactory scopeFactory)
     {
         _httpFactory = httpFactory;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<ProviderResult> SendAsync(Provider provider, ProviderRequest request, CancellationToken ct)
     {
         var settings = provider.SettingsJson.Deserialize<ProviderSettings>() ?? new ProviderSettings();
-        var http = _httpFactory.CreateClient("base");
-        http.BaseAddress = new Uri(provider.BaseUrl);
-        http.Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30);
-        http.DefaultRequestHeaders.Add("serviceName", "tbank");
+        
+        using var scope = _scopeFactory.CreateScope();
+        var providerHttpHandlerCache = scope.ServiceProvider.GetRequiredService<IProviderHttpHandlerCache>();
+        //var http = _httpFactory.CreateClient("base");
+        //http.BaseAddress = new Uri(provider.BaseUrl);
+        //http.Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30);
+        //http.DefaultRequestHeaders.Add("serviceName", "tbank");
+
+        var handler = providerHttpHandlerCache.GetOrCreate(provider.Id, settings);
+
+        using var http = new HttpClient(handler, disposeHandler: false)
+        {
+            BaseAddress = new Uri(provider.BaseUrl),
+            Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds > 0 ? provider.TimeoutSeconds : 30)
+        };
 
         var opName = request.Operation.ToLowerInvariant();
         if (opName is "check" or "prepare")

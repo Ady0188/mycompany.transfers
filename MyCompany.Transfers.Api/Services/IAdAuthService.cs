@@ -8,5 +8,5 @@ public interface IAdAuthService
     /// <summary>
     /// Проверяет логин и пароль в AD. Возвращает имя пользователя при успехе.
     /// </summary>
-    Task<(bool isValid, string? userName)> ValidateAsync(string login, string password, CancellationToken ct = default);
+    Task<(bool isValid, string? userName, string[] groups)> ValidateAsync(string login, string password, CancellationToken ct = default);
 }
