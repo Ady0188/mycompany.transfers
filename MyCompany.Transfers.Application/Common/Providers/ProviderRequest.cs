@@ -5,9 +5,11 @@ namespace MyCompany.Transfers.Application.Common.Providers;
 public sealed record ProviderRequest(
     string Source,
     string SourceAccount,
+    string? SourceBankIncomeAccount,
     string SourceCurrency,
     string Destination,
     string DestinationAccount,
+    string? DestinationCommissionAccount,
     string Operation,
     string TransferId,
     long NumId,

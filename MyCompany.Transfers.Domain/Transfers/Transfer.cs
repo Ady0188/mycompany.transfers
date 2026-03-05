@@ -126,9 +126,8 @@ public sealed class Transfer : IAggregateRoot
         ResolvedParameters = new Dictionary<string, string>(_parameters)
     };
 
-    public PrepareResponseDto ToPrepareResponseDto(Agent agent)
+    public PrepareResponseDto ToPrepareResponseDto(Agent agent, long remainingBalanceMinor)
     {
-        var remainingAmount = agent.Balances.TryGetValue(Amount.Currency, out var balance) ? balance : 0L;
         return new PrepareResponseDto
         {
             TransferId = Id.ToString("N"),
@@ -141,15 +140,14 @@ public sealed class Transfer : IAggregateRoot
             QuotationId = CurrentQuote?.Id ?? "",
             ExpiresAt = new ResponseDateTimeInfo(CurrentQuote?.ExpiresAt ?? DateTimeOffset.UtcNow.AddMinutes(5), agent.TimeZoneId),
             ResolvedParameters = new Dictionary<string, string>(_parameters),
-            Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingAmount, Currency = Amount.Currency } },
+            Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingBalanceMinor, Currency = Amount.Currency } },
             Rate = Math.Round(CurrentQuote!.ExchangeRate ?? 0, 4),
             Status = Status.ToResponse()
         };
     }
 
-    public ConfirmResponseDto ToConfirmResponseDto(Agent agent)
+    public ConfirmResponseDto ToConfirmResponseDto(Agent agent, long remainingBalanceMinor)
     {
-        var remainingAmount = agent.Balances.TryGetValue(Amount.Currency, out var balance) ? balance : 0L;
         return new ConfirmResponseDto
         {
             TransferId = Id.ToString(),
@@ -159,15 +157,14 @@ public sealed class Transfer : IAggregateRoot
             Fee = new MoneyDto { Amount = CurrentQuote?.Fee.Minor ?? 0, Currency = CurrentQuote?.Fee.Currency ?? string.Empty },
             Total = new MoneyDto { Amount = CurrentQuote?.Total.Minor ?? Amount.Minor, Currency = CurrentQuote?.Fee.Currency ?? string.Empty },
             Credit = new MoneyDto { Amount = CurrentQuote!.CreditedAmount.Minor, Currency = CurrentQuote!.CreditedAmount.Currency },
-            Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingAmount, Currency = Amount.Currency } },
+            Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingBalanceMinor, Currency = Amount.Currency } },
             Status = Status.ToResponse(),
             ConfirmedAt = new ResponseDateTimeInfo(ConfirmedAtUtc ?? DateTimeOffset.UtcNow, agent.TimeZoneId)
         };
     }
 
-    public StatusResponseDto ToStatusResponseDto(Agent agent)
+    public StatusResponseDto ToStatusResponseDto(Agent agent, long remainingBalanceMinor)
     {
-        var remainingAmount = agent.Balances.TryGetValue(Amount.Currency, out var balance) ? balance : 0L;
         return new StatusResponseDto
         {
             TransferId = Id.ToString(),
@@ -177,7 +174,7 @@ public sealed class Transfer : IAggregateRoot
             Fee = new MoneyDto { Amount = CurrentQuote?.Fee.Minor ?? 0, Currency = CurrentQuote?.Fee.Currency ?? string.Empty },
             Total = new MoneyDto { Amount = CurrentQuote?.Total.Minor ?? Amount.Minor, Currency = CurrentQuote?.Fee.Currency ?? string.Empty },
             Credit = new MoneyDto { Amount = CurrentQuote!.CreditedAmount.Minor, Currency = CurrentQuote!.CreditedAmount.Currency },
-            Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingAmount, Currency = Amount.Currency } },
+            Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingBalanceMinor, Currency = Amount.Currency } },
             Status = Status.ToResponse(),
             ConfirmedAt = new ResponseDateTimeInfo(ConfirmedAtUtc ?? DateTimeOffset.UtcNow, agent.TimeZoneId)
         };

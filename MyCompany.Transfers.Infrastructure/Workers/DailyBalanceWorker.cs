@@ -85,12 +85,9 @@ internal sealed class DailyBalanceWorker : BackgroundService
                 d.Scope == DailyBalanceScope.Local)
             .ToListAsync(ct);
 
-        var existingMap = existing.ToDictionary(
-            d => (d.AgentId, d.Currency),
-            d => d);
+        var existingMap = existing.ToDictionary(d => d.TerminalId, d => d);
 
-        var groups = histories
-            .GroupBy(h => (h.AgentId, h.Currency));
+        var groups = histories.Where(h => !string.IsNullOrEmpty(h.TerminalId)).GroupBy(h => h.TerminalId);
 
         foreach (var group in groups)
         {
@@ -101,9 +98,7 @@ internal sealed class DailyBalanceWorker : BackgroundService
             var opening = first.CurrentBalanceMinor;
             var closing = last.NewBalanceMinor;
 
-            var key = (first.AgentId, first.Currency);
-
-            if (existingMap.TryGetValue(key, out var daily))
+            if (existingMap.TryGetValue(first.TerminalId, out var daily))
             {
                 daily.UpdateClosingBalance(closing);
             }
@@ -111,6 +106,7 @@ internal sealed class DailyBalanceWorker : BackgroundService
             {
                 daily = AgentDailyBalance.Create(
                     first.AgentId,
+                    first.TerminalId,
                     targetDate,
                     first.Currency,
                     opening,
@@ -119,7 +115,7 @@ internal sealed class DailyBalanceWorker : BackgroundService
                     DailyBalanceScope.Local);
 
                 db.AgentDailyBalances.Add(daily);
-                existingMap[key] = daily;
+                existingMap[first.TerminalId] = daily;
             }
         }
 
@@ -166,13 +162,9 @@ internal sealed class DailyBalanceWorker : BackgroundService
                     d.Scope == DailyBalanceScope.Agent)
                 .ToListAsync(ct);
 
-            var existingMap = existing.ToDictionary(
-                d => d.Currency,
-                d => d,
-                StringComparer.OrdinalIgnoreCase);
+            var existingMap = existing.ToDictionary(d => d.TerminalId, d => d);
 
-            var groups = histories
-                .GroupBy(h => h.Currency, StringComparer.OrdinalIgnoreCase);
+            var groups = histories.Where(h => !string.IsNullOrEmpty(h.TerminalId)).GroupBy(h => h.TerminalId);
 
             foreach (var group in groups)
             {
@@ -182,9 +174,8 @@ internal sealed class DailyBalanceWorker : BackgroundService
 
                 var opening = first.CurrentBalanceMinor;
                 var closing = last.NewBalanceMinor;
-                var currency = first.Currency;
 
-                if (existingMap.TryGetValue(currency, out var daily))
+                if (existingMap.TryGetValue(first.TerminalId, out var daily))
                 {
                     daily.UpdateClosingBalance(closing);
                 }
@@ -192,15 +183,16 @@ internal sealed class DailyBalanceWorker : BackgroundService
                 {
                     daily = AgentDailyBalance.Create(
                         agent.Id,
+                        first.TerminalId,
                         targetDate,
-                        currency,
+                        first.Currency,
                         opening,
                         closing,
                         agent.TimeZoneId,
                         DailyBalanceScope.Agent);
 
                     db.AgentDailyBalances.Add(daily);
-                    existingMap[currency] = daily;
+                    existingMap[first.TerminalId] = daily;
                 }
             }
 

@@ -71,6 +71,17 @@ public sealed record TransfersRevenueReportItemDto(
     long MarginMinor,
     string Currency);
 
+public sealed record TransfersByBankReportItemDto(
+    string BankCode,
+    string BankName,
+    string Currency,
+    long SuccessCount,
+    long SuccessAmountMinor,
+    long ErrorCount,
+    long ErrorAmountMinor,
+    long TotalCount,
+    long TotalAmountMinor);
+
 public sealed record TransfersReportResult<TItem>(
     IReadOnlyList<TItem> Items,
     long TotalCount,

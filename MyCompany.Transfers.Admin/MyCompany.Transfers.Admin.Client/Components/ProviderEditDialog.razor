@@ -20,7 +20,10 @@
                             <MudTextField Label="Id" @bind-Value="_model.Id" Variant="Variant.Outlined" Required="true" RequiredError="Введите Id" ReadOnly="!_isCreate" Immediate="true" />
                         </MudItem>
                         <MudItem xs="12" sm="6" md="4">
-                            <MudTextField Label="Счёт" @bind-Value="_model.Account" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
+                            <MudTextField Label="Счёт зачисления" @bind-Value="_model.Account" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudTextField Label="Счёт комиссии провайдера" @bind-Value="_model.CommissionAccount" Variant="Variant.Outlined" Immediate="true" />
                         </MudItem>
                         <MudItem xs="12" sm="6" md="4">
                             <MudTextField Label="Название" Value="_model.Name" ValueChanged="@(EventCallback.Factory.Create<string>(this, OnNameChanged))" Variant="Variant.Outlined" Immediate="true" Placeholder="При создании из названия сгенерируется Id" />
@@ -87,6 +90,7 @@
         {
             Id = Model.Id,
             Account = Model.Account ?? "",
+            CommissionAccount = Model.CommissionAccount,
             Name = Model.Name ?? "",
             BaseUrl = Model.BaseUrl ?? "",
             TimeoutSeconds = Model.TimeoutSeconds,

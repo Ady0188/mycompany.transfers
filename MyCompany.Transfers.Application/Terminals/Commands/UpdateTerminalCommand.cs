@@ -11,6 +11,9 @@ public sealed record UpdateTerminalCommand(
     string Id,
     string? AgentId,
     string? Name,
+    string? Account,
+    string? BankIncomeAccount,
+    string? Currency,
     string? ApiKey,
     string? Secret,
     bool? Active) : IRequest<ErrorOr<TerminalAdminDto>>;
@@ -38,7 +41,7 @@ public sealed class UpdateTerminalCommandHandler : IRequestHandler<UpdateTermina
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            terminal.UpdateProfile(cmd.AgentId, cmd.Name, cmd.ApiKey, cmd.Secret, cmd.Active);
+            terminal.UpdateProfile(cmd.AgentId, cmd.Name, cmd.Account, cmd.BankIncomeAccount, cmd.Currency, cmd.ApiKey, cmd.Secret, cmd.Active);
             _terminals.Update(terminal);
             return Task.FromResult(true);
         }, ct);

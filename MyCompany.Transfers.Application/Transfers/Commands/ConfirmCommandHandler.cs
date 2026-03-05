@@ -20,6 +20,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
     private readonly IProviderRepository _providers;
     private readonly IProviderService _providerService;
     private readonly IAgentReadRepository _agentRepository;
+    private readonly ITerminalRepository _terminalRepository;
     private readonly IAgentBalanceHistoryRepository _balanceHistory;
     private readonly IBinRepository _binRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -35,6 +36,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
         IOutboxRepository outboxRepository,
         IProviderService providerService,
         IAgentReadRepository agentRepository,
+        ITerminalRepository terminalRepository,
         IAgentBalanceHistoryRepository balanceHistory,
         ILogger<ConfirmCommandHandler> logger,
         IBinRepository binRepository)
@@ -47,6 +49,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
         _outboxRepository = outboxRepository;
         _providerService = providerService;
         _agentRepository = agentRepository;
+        _terminalRepository = terminalRepository;
         _balanceHistory = balanceHistory;
         _logger = logger;
         _binRepository = binRepository;
@@ -84,7 +87,8 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                         break;
                     case TransferStatus.CONFIRMED:
                         _logger.LogInformation("ConfirmCommandHandler: transfer already confirmed ExternalId={ExternalId}, Id={Id}", m.ExternalId, transfer.Id);
-                        response = transfer.ToConfirmResponseDto(agent!);
+                        var termForResponse = await _terminalRepository.GetAsync(transfer.TerminalId, ct);
+                        response = transfer.ToConfirmResponseDto(agent!, termForResponse?.BalanceMinor ?? 0);
                         return true;
                     case TransferStatus.SUCCESS:
                     case TransferStatus.FAILED:
@@ -156,8 +160,16 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                     return false;
                 }
 
+                var terminal = await _terminalRepository.GetForUpdateAsync(transfer.TerminalId, ct);
+                if (terminal is null || terminal.AgentId != m.AgentId)
+                {
+                    _logger.LogInformation("ConfirmCommandHandler: terminal not found or not belongs to agent TerminalId={TerminalId}", transfer.TerminalId);
+                    error = AppErrors.Common.Validation("Терминал перевода не найден.");
+                    return false;
+                }
+
                 var total = transfer.CurrentQuote.Total;
-                if (!agent.HasSufficientBalance(total.Currency, total.Minor))
+                if (!terminal.HasSufficientBalance(total.Minor))
                 {
                     _logger.LogInformation("ConfirmCommandHandler: insufficient balance Currency={Currency}, RequiredMinor={Minor}", total.Currency, total.Minor);
                     error = AppErrors.Agents.InsufficientBalance(total.Currency);
@@ -165,14 +177,16 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                 }
 
                 var debitRefId = $"{transfer.Id}:Debit";
-                var alreadyDebited = await _balanceHistory.ExistsByReferenceAsync(agent.Id, total.Currency, BalanceHistoryReferenceType.Transfer, debitRefId, ct);
+                var alreadyDebited = await _balanceHistory.ExistsByReferenceAsync(terminal.Id, BalanceHistoryReferenceType.Transfer, debitRefId, ct);
                 if (!alreadyDebited)
                 {
-                    var currentBalance = agent.Balances.TryGetValue(total.Currency, out var cur) ? cur : 0L;
-                    agent.Debit(total.Currency, total.Minor);
-                    var newBalance = agent.Balances.TryGetValue(total.Currency, out var upd) ? upd : currentBalance - total.Minor;
+                    var currentBalance = terminal.BalanceMinor;
+                    terminal.Debit(total.Minor);
+                    _terminalRepository.Update(terminal);
+                    var newBalance = terminal.BalanceMinor;
                     var history = AgentBalanceHistory.CreateForTransfer(
                         agent.Id,
+                        terminal.Id,
                         debitRefId,
                         nowUtc.UtcDateTime,
                         total.Currency,
@@ -186,9 +200,11 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
 
                 providerReq = new ProviderRequest(Source: agent.Id,
                     SourceAccount: string.Empty,
+                    SourceBankIncomeAccount: null,
                     SourceCurrency: string.Empty,
                     Destination: string.Empty,
                     DestinationAccount: string.Empty,
+                    DestinationCommissionAccount: null,
                     SourceAmount: 0,
                     SourceFeeAmount: 0,
                     TotalAmount: 0,
@@ -198,7 +214,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                     ExternalId: transfer.ExternalId,
                     ServiceId: service.Id, 
                     ProviderServiceId: service.ProviderServiceId, 
-                    Account: transfer.Account,
+                    Account: transfer.Account ?? string.Empty,
                     CreditAmount: transfer.CurrentQuote!.CreditedAmount.Minor,
                     ProviderFee: transfer.CurrentQuote!.ProviderFee.Minor,
                     CurrencyIsoCode: service.AllowedCurrencies.First(),
@@ -216,7 +232,7 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                     outbox.MarkCompleted(_clock.GetUtcNow(), OutboxStatus.SUCCESS);
                 }
 
-                response = transfer.ToConfirmResponseDto(agent);
+                response = transfer.ToConfirmResponseDto(agent, terminal.BalanceMinor);
 
                 return true;
             }, ct);
@@ -246,19 +262,21 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                         providerResult.Status == OutboxStatus.TECHNICAL ? ProviderResultKind.Technical : ProviderResultKind.Error, status);
                     transfer.MarkFailed(DateTimeOffset.UtcNow);
 
-                    var agentForRefund = await _agentRepository.GetForUpdateSqlAsync(transfer.AgentId, ct);
-                    if (agentForRefund is not null)
+                    var terminalForRefund = await _terminalRepository.GetForUpdateAsync(transfer.TerminalId, ct);
+                    if (terminalForRefund is not null)
                     {
                         var totalRefund = transfer.CurrentQuote!.Total;
                         var refundRefId = $"{transfer.Id}:Refund";
-                        var alreadyRefunded = await _balanceHistory.ExistsByReferenceAsync(agentForRefund.Id, totalRefund.Currency, BalanceHistoryReferenceType.Transfer, refundRefId, ct);
+                        var alreadyRefunded = await _balanceHistory.ExistsByReferenceAsync(terminalForRefund.Id, BalanceHistoryReferenceType.Transfer, refundRefId, ct);
                         if (!alreadyRefunded)
                         {
-                            var currentBalance = agentForRefund.Balances.TryGetValue(totalRefund.Currency, out var cr) ? cr : 0L;
-                            agentForRefund.Credit(totalRefund.Currency, totalRefund.Minor);
-                            var newBalance = agentForRefund.Balances.TryGetValue(totalRefund.Currency, out var up) ? up : currentBalance + totalRefund.Minor;
+                            var currentBalance = terminalForRefund.BalanceMinor;
+                            terminalForRefund.Credit(totalRefund.Minor);
+                            _terminalRepository.Update(terminalForRefund);
+                            var newBalance = terminalForRefund.BalanceMinor;
                             var refundHistory = AgentBalanceHistory.CreateForTransfer(
-                                agentForRefund.Id,
+                                transfer.AgentId,
+                                terminalForRefund.Id,
                                 refundRefId,
                                 _clock.GetUtcNow().UtcDateTime,
                                 totalRefund.Currency,

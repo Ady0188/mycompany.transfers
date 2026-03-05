@@ -24,7 +24,6 @@ public sealed class GetAgentsQueryHandler : IRequestHandler<GetAgentsQuery, Page
             dtos = dtos.Where(a =>
                 (a.Id?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (a.Name?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Account?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (a.TimeZoneId?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
         }
 

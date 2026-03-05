@@ -29,6 +29,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                 var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
                 var transferRepository = scope.ServiceProvider.GetRequiredService<ITransferRepository>();
                 var agentRepository = scope.ServiceProvider.GetRequiredService<IAgentReadRepository>();
+                var terminalRepository = scope.ServiceProvider.GetRequiredService<ITerminalRepository>();
                 var balanceHistoryRepository = scope.ServiceProvider.GetRequiredService<IAgentBalanceHistoryRepository>();
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
@@ -43,6 +44,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                         transferRepository,
                         outboxRepository,
                         agentRepository,
+                        terminalRepository,
                         balanceHistoryRepository,
                         unitOfWork,
                         stoppingToken);
@@ -67,6 +69,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
         ITransferRepository transferRepository,
         IOutboxRepository outboxRepository,
         IAgentReadRepository agentRepository,
+        ITerminalRepository terminalRepository,
         IAgentBalanceHistoryRepository balanceHistoryRepository,
         IUnitOfWork unitOfWork,
         CancellationToken ct)
@@ -83,6 +86,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
                     outbox,
                     providerRepo,
                     providerService,
+                    terminalRepository,
                     transferRepository,
                     outboxRepository,
                     agentRepository,
@@ -113,6 +117,7 @@ internal sealed class ProviderSenderWorker : BackgroundService
         Outbox msg,
         IProviderRepository providerRepo,
         IProviderService providerService,
+        ITerminalRepository terminalRepository,
         ITransferRepository transferRepository,
         IOutboxRepository outboxRepository,
         IAgentReadRepository agentRepository,
@@ -153,9 +158,11 @@ internal sealed class ProviderSenderWorker : BackgroundService
                 var providerRequest = new ProviderRequest(
                     Source: msg.Source,
                     SourceAccount: string.Empty,
+                    SourceBankIncomeAccount: null,
                     SourceCurrency: msg.CurrentQuote!.Total.Currency,
                     Destination: string.Empty,
                     DestinationAccount: string.Empty,
+                    DestinationCommissionAccount: null,
                     Operation: operation,
                     TransferId: msg.TransferId.ToString(),
                     NumId: msg.NumId,
@@ -262,19 +269,21 @@ internal sealed class ProviderSenderWorker : BackgroundService
                     kind: ProviderResultKind.Error,
                     status: trnSts);
 
-                var agent = await agentRepository.GetForUpdateSqlAsync(transfer.AgentId, ct);
-                if (agent is not null)
+                var terminalForRefund = await terminalRepository.GetForUpdateAsync(transfer.TerminalId, ct);
+                if (terminalForRefund is not null)
                 {
                     var totalRefund = transfer.CurrentQuote!.Total;
                     var refundRefId = $"{transfer.Id}:Refund";
-                    var alreadyRefunded = await balanceHistoryRepository.ExistsByReferenceAsync(agent.Id, totalRefund.Currency, BalanceHistoryReferenceType.Transfer, refundRefId, ct);
+                    var alreadyRefunded = await balanceHistoryRepository.ExistsByReferenceAsync(terminalForRefund.Id, BalanceHistoryReferenceType.Transfer, refundRefId, ct);
                     if (!alreadyRefunded)
                     {
-                        var currentBalance = agent.Balances.TryGetValue(totalRefund.Currency, out var cr) ? cr : 0L;
-                        agent.Credit(totalRefund.Currency, totalRefund.Minor);
-                        var newBalance = agent.Balances.TryGetValue(totalRefund.Currency, out var up) ? up : currentBalance + totalRefund.Minor;
+                        var currentBalance = terminalForRefund.BalanceMinor;
+                        terminalForRefund.Credit(totalRefund.Minor);
+                        terminalRepository.Update(terminalForRefund);
+                        var newBalance = terminalForRefund.BalanceMinor;
                         var refundHistory = AgentBalanceHistory.CreateForTransfer(
-                            agent.Id,
+                            transfer.AgentId,
+                            terminalForRefund.Id,
                             refundRefId,
                             nowUtc.UtcDateTime,
                             totalRefund.Currency,

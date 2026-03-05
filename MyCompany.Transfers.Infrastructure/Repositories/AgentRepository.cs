@@ -29,18 +29,21 @@ public sealed class AgentRepository : IAgentRepository
 
     public async Task<BalanceResponseDto?> GetBalancesAsync(string agentId, CancellationToken ct)
     {
-        var agent = await _db.Agents.AsNoTracking().FirstOrDefaultAsync(a => a.Id == agentId, ct);
-        if (agent is null) return null;
-        var items = agent.Balances.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(kv => new MoneyDto { Currency = kv.Key, Amount = kv.Value }).ToList();
-        return new BalanceResponseDto { AgentId = agent.Id, Balances = items };
+        if (await _db.Agents.AsNoTracking().AnyAsync(a => a.Id == agentId, ct) == false)
+            return null;
+        var terminals = await _db.Terminals.AsNoTracking()
+            .Where(t => t.AgentId == agentId)
+            .OrderBy(t => t.Currency)
+            .ToListAsync(ct);
+        var items = terminals.Select(t => new MoneyDto { Currency = t.Currency, Amount = t.BalanceMinor }).ToList();
+        return new BalanceResponseDto { AgentId = agentId, Balances = items };
     }
 
     public async Task<long?> GetBalanceAsync(string agentId, string currency, CancellationToken ct)
     {
-        var agent = await _db.Agents.AsNoTracking().FirstOrDefaultAsync(a => a.Id == agentId, ct);
-        if (agent is null) return null;
-        return agent.Balances.TryGetValue(currency, out var v) ? v : 0L;
+        var terminal = await _db.Terminals.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.AgentId == agentId && t.Currency == currency.Trim().ToUpperInvariant(), ct);
+        return terminal?.BalanceMinor ?? 0L;
     }
 
     public async Task<IReadOnlyList<Agent>> GetAllAsync(CancellationToken ct) =>

@@ -28,13 +28,6 @@
                 </MudItem>
 
                 <MudItem xs="12" md="5">
-                    <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Счёт <span class="text-error">*</span></MudText>
-                </MudItem>
-                <MudItem xs="12" md="7">
-                    <MudTextField @bind-Value="_model.Account" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
-                </MudItem>
-
-                <MudItem xs="12" md="5">
                     <MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Часовой пояс</MudText>
                 </MudItem>
                 <MudItem xs="12" md="7">
@@ -124,7 +117,6 @@
         {
             Id = Model.Id,
             Name = Model.Name ?? "",
-            Account = Model.Account,
             TimeZoneId = Model.TimeZoneId ?? "UTC",
             SettingsJson = Model.SettingsJson ?? "",
             PartnerEmail = Model.PartnerEmail,

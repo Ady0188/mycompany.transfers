@@ -40,7 +40,7 @@ public sealed class TerminalsController : BaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TerminalAdminDto dto, CancellationToken ct = default)
     {
-        var cmd = new CreateTerminalCommand(dto.AgentId, dto.Name, dto.ApiKey, dto.Active);
+        var cmd = new CreateTerminalCommand(dto.AgentId, dto.Name, dto.Account, dto.BankIncomeAccount, dto.Currency, dto.ApiKey, dto.Active);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created), Problem);
     }
@@ -48,7 +48,7 @@ public sealed class TerminalsController : BaseController
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] TerminalAdminDto dto, CancellationToken ct = default)
     {
-        var cmd = new UpdateTerminalCommand(id, dto.AgentId, dto.Name, dto.ApiKey, null, dto.Active);
+        var cmd = new UpdateTerminalCommand(id, dto.AgentId, dto.Name, dto.Account, dto.BankIncomeAccount, dto.Currency, dto.ApiKey, null, dto.Active);
         var result = await _mediator.Send(cmd, ct);
         return result.Match(updated => Ok(updated), Problem);
     }

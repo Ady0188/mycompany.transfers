@@ -29,5 +29,11 @@ public interface ITransfersReportService
         int page,
         int pageSize,
         CancellationToken ct);
+
+    Task<TransfersReportResult<TransfersByBankReportItemDto>> GetByBankAsync(
+        TransfersCommonReportFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken ct);
 }
 

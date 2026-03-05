@@ -6,6 +6,8 @@ public sealed class AgentBalanceHistory : IEntity
 {
     public Guid Id { get; private set; }
     public string AgentId { get; private set; } = default!;
+    /// <summary>Терминал, по которому проведён баланс (один терминал = один счёт = одна валюта). Null для старых записей до бэкфилла.</summary>
+    public string? TerminalId { get; private set; }
     /// <summary>Для операций АБС — идентификатор документа; для переводов — null.</summary>
     public long? DocId { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
@@ -22,6 +24,7 @@ public sealed class AgentBalanceHistory : IEntity
     private AgentBalanceHistory(
         Guid id,
         string agentId,
+        string terminalId,
         long? docId,
         DateTime createdAtUtc,
         string currency,
@@ -33,6 +36,7 @@ public sealed class AgentBalanceHistory : IEntity
     {
         Id = id;
         AgentId = agentId;
+        TerminalId = terminalId;
         DocId = docId;
         CreatedAtUtc = createdAtUtc;
         Currency = currency;
@@ -46,6 +50,7 @@ public sealed class AgentBalanceHistory : IEntity
     /// <summary>Создать запись по документу АБС (кредит/дебет).</summary>
     public static AgentBalanceHistory CreateForAbsDocument(
         string agentId,
+        string terminalId,
         long docId,
         DateTime createdAtUtc,
         string currency,
@@ -55,12 +60,15 @@ public sealed class AgentBalanceHistory : IEntity
     {
         if (string.IsNullOrWhiteSpace(agentId))
             throw new DomainException("AgentId is required for balance history.");
+        if (string.IsNullOrWhiteSpace(terminalId))
+            throw new DomainException("TerminalId is required for balance history.");
         if (string.IsNullOrWhiteSpace(currency))
             throw new DomainException("Currency is required for balance history.");
 
         return new AgentBalanceHistory(
             Guid.NewGuid(),
             agentId,
+            terminalId,
             docId,
             createdAtUtc,
             currency,
@@ -75,6 +83,7 @@ public sealed class AgentBalanceHistory : IEntity
     /// <param name="referenceId">Уникальный ключ: например "{transferId}:Debit" или "{transferId}:Refund".</param>
     public static AgentBalanceHistory CreateForTransfer(
         string agentId,
+        string terminalId,
         string referenceId,
         DateTime createdAtUtc,
         string currency,
@@ -84,6 +93,8 @@ public sealed class AgentBalanceHistory : IEntity
     {
         if (string.IsNullOrWhiteSpace(agentId))
             throw new DomainException("AgentId is required for balance history.");
+        if (string.IsNullOrWhiteSpace(terminalId))
+            throw new DomainException("TerminalId is required for balance history.");
         if (string.IsNullOrWhiteSpace(currency))
             throw new DomainException("Currency is required for balance history.");
         if (string.IsNullOrWhiteSpace(referenceId))
@@ -92,6 +103,7 @@ public sealed class AgentBalanceHistory : IEntity
         return new AgentBalanceHistory(
             Guid.NewGuid(),
             agentId,
+            terminalId,
             null,
             createdAtUtc,
             currency,

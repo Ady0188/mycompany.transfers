@@ -14,6 +14,18 @@ public sealed class TerminalAdminDto
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
+    [JsonPropertyName("account")]
+    public string Account { get; set; } = "";
+
+    [JsonPropertyName("bankIncomeAccount")]
+    public string? BankIncomeAccount { get; set; }
+
+    [JsonPropertyName("currency")]
+    public string Currency { get; set; } = "";
+
+    [JsonPropertyName("balanceMinor")]
+    public long BalanceMinor { get; set; }
+
     [JsonPropertyName("apiKey")]
     public string ApiKey { get; set; } = "";
 

@@ -6,6 +6,8 @@ public sealed class AgentDailyBalance : IEntity
 {
     public Guid Id { get; private set; }
     public string AgentId { get; private set; } = default!;
+    /// <summary>Терминал (один счёт = одна валюта). Дневной баланс считается по терминалу. Null для старых записей до бэкфилла.</summary>
+    public string? TerminalId { get; private set; }
     public DateTime Date { get; private set; }
     public string Currency { get; private set; } = default!;
     public long OpeningBalanceMinor { get; private set; }
@@ -20,6 +22,7 @@ public sealed class AgentDailyBalance : IEntity
     private AgentDailyBalance(
         Guid id,
         string agentId,
+        string terminalId,
         DateTime date,
         string currency,
         long openingBalanceMinor,
@@ -29,6 +32,7 @@ public sealed class AgentDailyBalance : IEntity
     {
         Id = id;
         AgentId = agentId;
+        TerminalId = terminalId;
         Date = date.Date;
         Currency = currency;
         OpeningBalanceMinor = openingBalanceMinor;
@@ -39,6 +43,7 @@ public sealed class AgentDailyBalance : IEntity
 
     public static AgentDailyBalance Create(
         string agentId,
+        string terminalId,
         DateTime date,
         string currency,
         long openingBalanceMinor,
@@ -48,6 +53,8 @@ public sealed class AgentDailyBalance : IEntity
     {
         if (string.IsNullOrWhiteSpace(agentId))
             throw new DomainException("AgentId is required for daily balance.");
+        if (string.IsNullOrWhiteSpace(terminalId))
+            throw new DomainException("TerminalId is required for daily balance.");
         if (string.IsNullOrWhiteSpace(currency))
             throw new DomainException("Currency is required for daily balance.");
         if (string.IsNullOrWhiteSpace(timeZoneId))
@@ -56,6 +63,7 @@ public sealed class AgentDailyBalance : IEntity
         return new AgentDailyBalance(
             Guid.NewGuid(),
             agentId,
+            terminalId,
             date.Date,
             currency,
             openingBalanceMinor,

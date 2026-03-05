@@ -7,7 +7,8 @@ public enum TransfersReportType
     ByPeriod,
     ByAgent,
     ByProvider,
-    Revenue
+    Revenue,
+    ByBankCards
 }
 
 public enum TransfersReportGroupByClient
@@ -140,6 +141,36 @@ public sealed class TransfersRevenueReportItemModel
 
     [JsonPropertyName("currency")]
     public string Currency { get; set; } = "";
+}
+
+public sealed class TransfersByBankReportItemModel
+{
+    [JsonPropertyName("bankCode")]
+    public string BankCode { get; set; } = "";
+
+    [JsonPropertyName("bankName")]
+    public string BankName { get; set; } = "";
+
+    [JsonPropertyName("currency")]
+    public string Currency { get; set; } = "";
+
+    [JsonPropertyName("successCount")]
+    public long SuccessCount { get; set; }
+
+    [JsonPropertyName("successAmountMinor")]
+    public long SuccessAmountMinor { get; set; }
+
+    [JsonPropertyName("errorCount")]
+    public long ErrorCount { get; set; }
+
+    [JsonPropertyName("errorAmountMinor")]
+    public long ErrorAmountMinor { get; set; }
+
+    [JsonPropertyName("totalCount")]
+    public long TotalCount { get; set; }
+
+    [JsonPropertyName("totalAmountMinor")]
+    public long TotalAmountMinor { get; set; }
 }
 
 public sealed class TransfersReportResultModel<TItem>

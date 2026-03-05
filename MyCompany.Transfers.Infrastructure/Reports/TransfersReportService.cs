@@ -352,13 +352,114 @@ public sealed class TransfersReportService : ITransfersReportService
         }
     }
 
-    private IQueryable<Transfer> ApplyCommonFilter(IQueryable<Transfer> query, TransfersCommonReportFilter filter)
+    public async Task<TransfersReportResult<TransfersByBankReportItemDto>> GetByBankAsync(
+        TransfersCommonReportFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken ct)
+    {
+        var providerIds = new[] { "IPS", "FIMI" };
+
+        var baseQuery =
+            from t in _db.Transfers.AsNoTracking()
+            join s in _db.Services.AsNoTracking() on t.ServiceId equals s.Id
+            where providerIds.Contains(s.ProviderId)
+            select t;
+
+        var query = ApplyCommonFilter(baseQuery, filter, ignoreStatus: true);
+        var transfers = await query.ToListAsync(ct);
+
+        var bins = await _db.Bins.AsNoTracking().ToListAsync(ct);
+
+        static (string code, string name) ResolveBank(IReadOnlyList<MyCompany.Transfers.Domain.Bins.Bin> allBins, string? account)
+        {
+            if (string.IsNullOrWhiteSpace(account))
+                return ("UNKNOWN", "Неизвестный банк");
+            var pan = account.Trim();
+            MyCompany.Transfers.Domain.Bins.Bin? best = null;
+            foreach (var b in allBins)
+            {
+                if (pan.Length < b.Len) continue;
+                if (pan.StartsWith(b.Prefix, StringComparison.Ordinal))
+                {
+                    if (best == null || b.Len > best.Len)
+                        best = b;
+                }
+            }
+            return best is null ? ("UNKNOWN", "Неизвестный банк") : (best.Code, best.Name);
+        }
+
+        var dict = new Dictionary<(string BankCode, string BankName, string Currency), (long SuccCount, long SuccAmount, long ErrCount, long ErrAmount, long TotalCount, long TotalAmount)>();
+
+        foreach (var t in transfers)
+        {
+            var (bankCode, bankName) = ResolveBank(bins, t.Account);
+            var key = (bankCode, bankName, t.Amount.Currency);
+            dict.TryGetValue(key, out var agg);
+
+            var amount = t.Amount.Minor;
+            var status = t.Status;
+            var isSuccess = status == TransferStatus.SUCCESS;
+            var isError = status == TransferStatus.FAILED || status == TransferStatus.TECHNICAL;
+
+            if (isSuccess)
+            {
+                agg.SuccCount++;
+                agg.SuccAmount += amount;
+            }
+            else if (isError)
+            {
+                agg.ErrCount++;
+                agg.ErrAmount += amount;
+            }
+
+            agg.TotalCount++;
+            agg.TotalAmount += amount;
+
+            dict[key] = agg;
+        }
+
+        var pageIndex = Math.Max(0, page - 1);
+        var size = pageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(pageSize, TransfersReportLimits.MaxPageSize);
+
+        var itemsAll = dict
+            .Select(kv => new TransfersByBankReportItemDto(
+                kv.Key.BankCode,
+                kv.Key.BankName,
+                kv.Key.Currency,
+                kv.Value.SuccCount,
+                kv.Value.SuccAmount,
+                kv.Value.ErrCount,
+                kv.Value.ErrAmount,
+                kv.Value.TotalCount,
+                kv.Value.TotalAmount))
+            .OrderBy(i => i.BankName)
+            .ThenBy(i => i.Currency)
+            .ToList();
+
+        var totalCount = itemsAll.Count;
+        var items = itemsAll
+            .Skip(pageIndex * size)
+            .Take(size)
+            .ToList();
+
+        var totalAmount = itemsAll.Sum(i => i.TotalAmountMinor);
+
+        return new TransfersReportResult<TransfersByBankReportItemDto>(
+            items,
+            totalCount,
+            totalAmount,
+            0,
+            0);
+    }
+
+    private IQueryable<Transfer> ApplyCommonFilter(IQueryable<Transfer> query, TransfersCommonReportFilter filter, bool ignoreStatus = false)
     {
         if (filter.From.HasValue)
             query = query.Where(t => t.CreatedAtUtc >= filter.From.Value);
         if (filter.To.HasValue)
             query = query.Where(t => t.CreatedAtUtc <= filter.To.Value);
-        if (!string.IsNullOrWhiteSpace(filter.Status))
+        if (!ignoreStatus && !string.IsNullOrWhiteSpace(filter.Status))
         {
             var st = filter.Status.Trim();
             query = query.Where(t => t.Status.ToString() == st);

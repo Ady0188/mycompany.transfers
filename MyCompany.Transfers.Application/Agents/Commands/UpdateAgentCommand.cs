@@ -8,7 +8,6 @@ namespace MyCompany.Transfers.Application.Agents.Commands;
 
 public sealed record UpdateAgentCommand(
     string Id,
-    string? Account,
     string? Name,
     string? TimeZoneId,
     string? SettingsJson,
@@ -34,7 +33,7 @@ public sealed class UpdateAgentCommandHandler : IRequestHandler<UpdateAgentComma
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            agent.UpdateProfile(m.Name, m.Account, m.TimeZoneId, m.SettingsJson, m.PartnerEmail, m.Locale);
+            agent.UpdateProfile(m.Name, m.TimeZoneId, m.SettingsJson, m.PartnerEmail, m.Locale);
             _agents.Update(agent);
             return Task.FromResult(true);
         }, ct);

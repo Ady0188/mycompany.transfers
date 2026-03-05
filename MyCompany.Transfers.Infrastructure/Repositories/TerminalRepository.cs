@@ -20,6 +20,12 @@ public sealed class TerminalRepository : ITerminalRepository
     public Task<Terminal?> GetForUpdateAsync(string terminalId, CancellationToken ct) =>
         _db.Terminals.FirstOrDefaultAsync(t => t.Id == terminalId, ct);
 
+    public Task<Terminal?> GetByAgentIdAndCurrencyForUpdateAsync(string agentId, string currency, CancellationToken ct)
+    {
+        var normCurrency = currency.Trim().ToUpperInvariant();
+        return _db.Terminals.FirstOrDefaultAsync(t => t.AgentId == agentId && t.Currency == normCurrency && t.Active, ct);
+    }
+
     public Task<bool> ExistsAsync(string terminalId, CancellationToken ct) =>
         _db.Terminals.AnyAsync(t => t.Id == terminalId, ct);
 

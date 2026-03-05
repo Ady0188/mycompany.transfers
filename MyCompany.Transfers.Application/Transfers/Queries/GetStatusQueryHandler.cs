@@ -12,12 +12,14 @@ public sealed class GetStatusQueryHandler : IRequestHandler<GetStatusQuery, Erro
 {
     private readonly ITransferReadRepository _read;
     private readonly IAgentReadRepository _agents;
+    private readonly ITerminalRepository _terminals;
     private readonly ILogger<GetStatusQueryHandler> _logger;
 
-    public GetStatusQueryHandler(ITransferReadRepository read, IAgentReadRepository agents, ILogger<GetStatusQueryHandler> logger)
+    public GetStatusQueryHandler(ITransferReadRepository read, IAgentReadRepository agents, ITerminalRepository terminals, ILogger<GetStatusQueryHandler> logger)
     {
         _read = read;
         _agents = agents;
+        _terminals = terminals;
         _logger = logger;
     }
 
@@ -39,14 +41,18 @@ public sealed class GetStatusQueryHandler : IRequestHandler<GetStatusQuery, Erro
             if (!string.IsNullOrWhiteSpace(m.ExternalId))
             {
                 trr = await _read.GetStatusByExternalIdAsync(agent.Id, m.ExternalId!, ct);
-                return trr is null ? AppErrors.Transfers.NotFound(m.ExternalId!) : trr.ToStatusResponseDto(agent);
+                if (trr is null) return AppErrors.Transfers.NotFound(m.ExternalId!);
+                var term = await _terminals.GetAsync(trr.TerminalId, ct);
+                return trr.ToStatusResponseDto(agent, term?.BalanceMinor ?? 0);
             }
 
             if (!Guid.TryParse(m.TransferId, out var id))
                 return AppErrors.Common.Validation("transferId имеет неверный формат (ожидается GUID).");
 
             trr = await _read.GetStatusByIdAsync(agent.Id, id, ct);
-            return trr is null ? AppErrors.Transfers.NotFoundById(id) : trr.ToStatusResponseDto(agent);
+            if (trr is null) return AppErrors.Transfers.NotFoundById(id);
+            var termById = await _terminals.GetAsync(trr.TerminalId, ct);
+            return trr.ToStatusResponseDto(agent, termById?.BalanceMinor ?? 0);
         }
         catch (Exception ex)
         {

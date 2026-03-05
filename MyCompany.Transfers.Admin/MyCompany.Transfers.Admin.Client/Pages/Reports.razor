@@ -33,6 +33,9 @@
                     <MudListItem T="string" OnClick="@(() => SelectReport(TransfersReportType.Revenue))" Class="@GetReportItemClass(TransfersReportType.Revenue)">
                         Доходность / комиссии
                     </MudListItem>
+                    <MudListItem T="string" OnClick="@(() => SelectReport(TransfersReportType.ByBankCards))" Class="@GetReportItemClass(TransfersReportType.ByBankCards)">
+                        Переводы по банкам (карты)
+                    </MudListItem>
                 </MudList>
             </MudItem>
 
@@ -42,10 +45,9 @@
                         <MudCardContent>
                             <MudGrid Spacing="2">
                                 <MudItem xs="12" sm="6" md="4">
-                                    <MudText Typo="Typo.caption" Class="mb-1">Период (дата создания)</MudText>
                                     <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                        <MudDatePicker @bind-Date="_filter.From" Label="С" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
-                                        <MudDatePicker @bind-Date="_filter.To" Label="По" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                                        <MudDatePicker @bind-Date="_filter.From" Label="Период с" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                                        <MudDatePicker @bind-Date="_filter.To" Label="Период по" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
                                     </MudStack>
                                 </MudItem>
                                 <MudItem xs="12" sm="6" md="3">
@@ -223,6 +225,38 @@
                                     </MudTable>
                                 }
                             }
+                            else if (_selectedReport == TransfersReportType.ByBankCards)
+                            {
+                                if (_byBank is null)
+                                {
+                                    <MudText Typo="Typo.body2">Отчет еще не сформирован.</MudText>
+                                }
+                                else
+                                {
+                                    <MudTable T="TransfersByBankReportItemModel" Items="_byBank.Items" Dense="true" Hover="true" Striped="true">
+                                        <HeaderContent>
+                                            <MudTh>Банк</MudTh>
+                                            <MudTh>Валюта</MudTh>
+                                            <MudTh>Успешные (кол-во)</MudTh>
+                                            <MudTh>Успешные (сумма)</MudTh>
+                                            <MudTh>Ошибочные (кол-во)</MudTh>
+                                            <MudTh>Ошибочные (сумма)</MudTh>
+                                            <MudTh>Всего (кол-во)</MudTh>
+                                            <MudTh>Всего (сумма)</MudTh>
+                                        </HeaderContent>
+                                        <RowTemplate>
+                                            <MudTd>@context.BankName</MudTd>
+                                            <MudTd>@context.Currency</MudTd>
+                                            <MudTd>@context.SuccessCount</MudTd>
+                                            <MudTd>@FormatMoney(context.SuccessAmountMinor, context.Currency)</MudTd>
+                                            <MudTd>@context.ErrorCount</MudTd>
+                                            <MudTd>@FormatMoney(context.ErrorAmountMinor, context.Currency)</MudTd>
+                                            <MudTd>@context.TotalCount</MudTd>
+                                            <MudTd>@FormatMoney(context.TotalAmountMinor, context.Currency)</MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                }
+                            }
                         </MudCardContent>
                     </MudCard>
                 </MudStack>
@@ -257,6 +291,7 @@
     private TransfersReportResultModel<TransfersByAgentReportItemModel>? _byAgent;
     private TransfersReportResultModel<TransfersByProviderReportItemModel>? _byProvider;
     private TransfersReportResultModel<TransfersRevenueReportItemModel>? _revenue;
+    private TransfersReportResultModel<TransfersByBankReportItemModel>? _byBank;
 
     protected override async Task OnInitializedAsync()
     {
@@ -303,6 +338,9 @@
                     break;
                 case TransfersReportType.Revenue:
                     _revenue = await ReportsApi.GetTransfersRevenueAsync(_filter, _page, _pageSize);
+                    break;
+                case TransfersReportType.ByBankCards:
+                    _byBank = await ReportsApi.GetTransfersByBankCardsAsync(_filter, _page, _pageSize);
                     break;
             }
         }

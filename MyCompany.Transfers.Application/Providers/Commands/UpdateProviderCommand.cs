@@ -10,6 +10,7 @@ namespace MyCompany.Transfers.Application.Providers.Commands;
 public sealed record UpdateProviderCommand(
     string Id,
     string? Account,
+    string? CommissionAccount,
     string? Name,
     string? BaseUrl,
     int? TimeoutSeconds,
@@ -37,7 +38,7 @@ public sealed class UpdateProviderCommandHandler : IRequestHandler<UpdateProvide
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {
-            provider.UpdateProfile(cmd.Account, cmd.Name, cmd.BaseUrl, cmd.TimeoutSeconds, cmd.AuthType, cmd.SettingsJson, cmd.IsEnabled, cmd.FeePermille);
+            provider.UpdateProfile(cmd.Account, cmd.CommissionAccount, cmd.Name, cmd.BaseUrl, cmd.TimeoutSeconds, cmd.AuthType, cmd.SettingsJson, cmd.IsEnabled, cmd.FeePermille);
             _providers.Update(provider);
             return Task.FromResult(true);
         }, ct);

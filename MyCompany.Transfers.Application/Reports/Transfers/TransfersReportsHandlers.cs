@@ -63,3 +63,18 @@ public sealed class GetTransfersRevenueReportHandler
     }
 }
 
+public sealed class GetTransfersByBankReportHandler
+    : IRequestHandler<GetTransfersByBankReportQuery, TransfersReportResult<TransfersByBankReportItemDto>>
+{
+    private readonly ITransfersReportService _reports;
+
+    public GetTransfersByBankReportHandler(ITransfersReportService reports) => _reports = reports;
+
+    public Task<TransfersReportResult<TransfersByBankReportItemDto>> Handle(GetTransfersByBankReportQuery request, CancellationToken ct)
+    {
+        var page = Math.Max(1, request.Page);
+        var size = request.PageSize <= 0 ? TransfersReportLimits.DefaultPageSize : Math.Min(request.PageSize, TransfersReportLimits.MaxPageSize);
+        return _reports.GetByBankAsync(request.Filter, page, size, ct);
+    }
+}
+

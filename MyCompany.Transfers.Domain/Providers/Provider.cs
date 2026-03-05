@@ -6,8 +6,10 @@ namespace MyCompany.Transfers.Domain.Providers;
 public sealed class Provider
 {
     public string Id { get; private set; } = default!;
-    /// <summary>Счёт для проводок (бухгалтерия).</summary>
+    /// <summary>Счёт зачисления (куда переводится сумма перевода).</summary>
     public string Account { get; private set; } = default!;
+    /// <summary>Счёт для расчётов комиссии провайдера.</summary>
+    public string? CommissionAccount { get; private set; }
     public string Name { get; private set; } = default!;
     public string BaseUrl { get; private set; } = default!;
     public int TimeoutSeconds { get; private set; } = 30;
@@ -19,11 +21,12 @@ public sealed class Provider
 
     private Provider() { }
 
-    public Provider(string id, string account, string name, string baseUrl, int timeoutSeconds, ProviderAuthType authType, string settingsJson, bool isEnabled = true, int feePermille = 0)
+    public Provider(string id, string account, string? commissionAccount, string name, string baseUrl, int timeoutSeconds, ProviderAuthType authType, string settingsJson, bool isEnabled = true, int feePermille = 0)
     {
         Id = id;
-        if (string.IsNullOrWhiteSpace(account)) throw new DomainException("Счёт провайдера обязателен для проводок.");
+        if (string.IsNullOrWhiteSpace(account)) throw new DomainException("Счёт зачисления провайдера обязателен.");
         Account = account.Trim();
+        CommissionAccount = string.IsNullOrWhiteSpace(commissionAccount) ? null : commissionAccount.Trim();
         Name = name;
         BaseUrl = baseUrl;
         TimeoutSeconds = timeoutSeconds;
@@ -36,10 +39,11 @@ public sealed class Provider
     /// <summary>
     /// Обновление профиля провайдера. Переданные непустые значения заменяют текущие.
     /// </summary>
-    public void UpdateProfile(string? account = null, string? name = null, string? baseUrl = null, int? timeoutSeconds = null,
+    public void UpdateProfile(string? account = null, string? commissionAccount = null, string? name = null, string? baseUrl = null, int? timeoutSeconds = null,
         ProviderAuthType? authType = null, string? settingsJson = null, bool? isEnabled = null, int? feePermille = null)
     {
         if (!string.IsNullOrWhiteSpace(account)) Account = account.Trim();
+        if (commissionAccount is not null) CommissionAccount = string.IsNullOrWhiteSpace(commissionAccount) ? null : commissionAccount.Trim();
         if (!string.IsNullOrWhiteSpace(name)) Name = name;
         if (!string.IsNullOrWhiteSpace(baseUrl)) BaseUrl = baseUrl;
         if (timeoutSeconds.HasValue) TimeoutSeconds = timeoutSeconds.Value;

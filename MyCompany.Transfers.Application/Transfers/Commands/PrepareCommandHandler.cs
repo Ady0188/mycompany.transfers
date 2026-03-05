@@ -16,6 +16,7 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
 {
     private readonly ITransferRepository _transfers;
     private readonly IAgentReadRepository _agents;
+    private readonly ITerminalRepository _terminals;
     private readonly IProviderService _providerService;
     private readonly IServiceRepository _services;
     private readonly IParameterRepository _paramRepo;
@@ -31,6 +32,7 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
     public PrepareCommandHandler(
         ITransferRepository transfers,
         IAgentReadRepository agents,
+        ITerminalRepository terminals,
         IServiceRepository services,
         IUnitOfWork unitOfWork,
         TimeProvider clock,
@@ -45,6 +47,7 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
     {
         _transfers = transfers;
         _agents = agents;
+        _terminals = terminals;
         _services = services;
         _unitOfWork = unitOfWork;
         _clock = clock;
@@ -92,11 +95,23 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
                 return AppErrors.Common.Forbidden($"Агенту '{request.AgentId}' недоступна валюта '{request.Currency}'.");
             }
 
+            var terminal = await _terminals.GetForUpdateAsync(request.TerminalId, ct);
+            if (terminal is null || terminal.AgentId != request.AgentId)
+            {
+                _logger.LogWarning("PrepareCommandHandler: TerminalId={TerminalId} not found or not belongs to agent", request.TerminalId);
+                return AppErrors.Common.Forbidden($"Терминал '{request.TerminalId}' не найден или не принадлежит агенту.");
+            }
+            if (terminal.Currency != request.Currency.Trim().ToUpperInvariant())
+            {
+                _logger.LogWarning("PrepareCommandHandler: Terminal currency {TerminalCurrency} != request currency {Currency}", terminal.Currency, request.Currency);
+                return AppErrors.Common.Validation($"Валюта терминала ({terminal.Currency}) не совпадает с валютой перевода ({request.Currency}).");
+            }
+
             var nowUtc = _clock.GetUtcNow();
             var feeMinor = access.CalculateFee(request.Amount);
             var totalMinor = checked(request.Amount + feeMinor);
 
-            if (!agent.HasSufficientBalance(request.Currency, totalMinor))
+            if (!terminal.HasSufficientBalance(totalMinor))
             {
                 _logger.LogWarning("PrepareCommandHandler: AgentId={AgentId}, insufficient balance Currency={Currency}", request.AgentId, request.Currency);
                 return AppErrors.Agents.InsufficientBalance(request.Currency);
@@ -181,9 +196,11 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
             {
                 var providerReq = new ProviderRequest(Source: agent.Id,
                     SourceAccount: string.Empty,
+                    SourceBankIncomeAccount: null,
                     SourceCurrency: string.Empty,
                     Destination: string.Empty,
                     DestinationAccount: string.Empty,
+                    DestinationCommissionAccount: null,
                     SourceAmount: 0,
                     SourceFeeAmount: 0,
                     TotalAmount: 0,
@@ -225,7 +242,7 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
             }
 
             _logger.LogInformation("PrepareCommandHandler: prepared ExternalId={ExternalId}, Id={Id}, Status={Status}", request.ExternalId, transfer.Id, transfer.Status);
-            return transfer.ToPrepareResponseDto(agent);
+            return transfer.ToPrepareResponseDto(agent, terminal.BalanceMinor);
         }
         catch (Exception ex)
         {

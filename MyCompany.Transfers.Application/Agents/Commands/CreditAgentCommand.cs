@@ -20,30 +20,36 @@ public sealed class AgentBalanceResult
 public sealed class CreditAgentCommandHandler : IRequestHandler<CreditAgentCommand, ErrorOr<AgentBalanceResult>>
 {
     private readonly IAgentRepository _agents;
+    private readonly ITerminalRepository _terminals;
     private readonly IUnitOfWork _uow;
     private readonly IAgentBalanceHistoryRepository _balanceHistory;
 
     public CreditAgentCommandHandler(
         IAgentRepository agents,
+        ITerminalRepository terminals,
         IUnitOfWork uow,
         IAgentBalanceHistoryRepository balanceHistory)
     {
         _agents = agents;
+        _terminals = terminals;
         _uow = uow;
         _balanceHistory = balanceHistory;
     }
 
     public async Task<ErrorOr<AgentBalanceResult>> Handle(CreditAgentCommand cmd, CancellationToken ct)
     {
-        var agent = await _agents.GetForUpdateSqlAsync(cmd.AgentId, ct);
-        if (agent is null)
+        if (!await _agents.ExistsAsync(cmd.AgentId, ct))
             return AppErrors.Agents.NotFound(cmd.AgentId);
 
         var currency = cmd.Currency.Trim().ToUpperInvariant();
         if (cmd.AmountMinor <= 0)
             return AppErrors.Common.Validation("Сумма зачисления должна быть положительной.");
 
-        var existingHistory = await _balanceHistory.GetByDocIdAsync(cmd.AgentId, currency, cmd.DocId, ct);
+        var terminal = await _terminals.GetByAgentIdAndCurrencyForUpdateAsync(cmd.AgentId, currency, ct);
+        if (terminal is null)
+            return AppErrors.Common.Validation($"У агента '{cmd.AgentId}' не найден активный терминал с валютой '{currency}'.");
+
+        var existingHistory = await _balanceHistory.GetByDocIdAsync(terminal.Id, cmd.DocId, ct);
         if (existingHistory is not null)
         {
             return new AgentBalanceResult
@@ -56,15 +62,16 @@ public sealed class CreditAgentCommandHandler : IRequestHandler<CreditAgentComma
         await _uow.ExecuteTransactionalAsync(async _ =>
         {
             var nowUtc = DateTime.UtcNow;
-            var currentBalance = agent.Balances.TryGetValue(currency, out var current) ? current : 0L;
+            var currentBalance = terminal.BalanceMinor;
 
-            agent.Credit(currency, cmd.AmountMinor);
-            _agents.Update(agent);
+            terminal.Credit(cmd.AmountMinor);
+            _terminals.Update(terminal);
 
-            var newBalance = agent.Balances.TryGetValue(currency, out var updated) ? updated : currentBalance + cmd.AmountMinor;
+            var newBalance = terminal.BalanceMinor;
 
             var history = AgentBalanceHistory.CreateForAbsDocument(
-                agent.Id,
+                terminal.AgentId,
+                terminal.Id,
                 cmd.DocId,
                 nowUtc,
                 currency,
@@ -76,7 +83,6 @@ public sealed class CreditAgentCommandHandler : IRequestHandler<CreditAgentComma
             return true;
         }, ct);
 
-        var balance = agent.Balances.TryGetValue(currency, out var v) ? v : 0;
-        return new AgentBalanceResult { Currency = currency, BalanceMinor = balance };
+        return new AgentBalanceResult { Currency = currency, BalanceMinor = terminal.BalanceMinor };
     }
 }

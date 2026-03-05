@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyCompany.Transfers.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260305021440_TerminalsAccountCurrencyBalance")]
+    partial class TerminalsAccountCurrencyBalance
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -79,6 +82,17 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                 {
                     b.Property<string>("Id")
                         .HasColumnType("text");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Balances")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
 
                     b.Property<string>("Locale")
                         .IsRequired()
@@ -155,19 +169,14 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
-                    b.Property<string>("TerminalId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("TerminalId", "CreatedAtUtc")
-                        .HasDatabaseName("IX_AgentBalanceHistory_TerminalId_CreatedAtUtc");
+                    b.HasIndex("AgentId", "Currency", "CreatedAtUtc")
+                        .HasDatabaseName("IX_AgentBalanceHistory_AgentId_Currency_CreatedAtUtc");
 
-                    b.HasIndex("TerminalId", "ReferenceType", "ReferenceId")
+                    b.HasIndex("AgentId", "Currency", "ReferenceType", "ReferenceId")
                         .IsUnique()
-                        .HasDatabaseName("IX_AgentBalanceHistory_TerminalId_ReferenceType_ReferenceId");
+                        .HasDatabaseName("IX_AgentBalanceHistory_AgentId_Currency_ReferenceType_ReferenceId");
 
                     b.ToTable("AgentBalanceHistory", (string)null);
                 });
@@ -220,11 +229,6 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
-                    b.Property<string>("TerminalId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -235,9 +239,9 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                     b.HasIndex("AgentId", "Date")
                         .HasDatabaseName("IX_AgentDailyBalance_AgentId_Date");
 
-                    b.HasIndex("TerminalId", "Date", "TimeZoneId", "Scope")
+                    b.HasIndex("AgentId", "Currency", "Date", "TimeZoneId", "Scope")
                         .IsUnique()
-                        .HasDatabaseName("IX_AgentDailyBalance_TerminalId_Date_TimeZoneId_Scope");
+                        .HasDatabaseName("IX_AgentDailyBalance_AgentId_Currency_Date_TimeZoneId_Scope");
 
                     b.ToTable("AgentDailyBalance", (string)null);
                 });
@@ -309,11 +313,6 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
-                    b.Property<string>("Account")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
                     b.Property<bool>("Active")
                         .HasColumnType("boolean");
 
@@ -326,20 +325,6 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
-
-                    b.Property<long>("BalanceMinor")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.Property<string>("BankIncomeAccount")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -411,10 +396,6 @@ namespace MyCompany.Transfers.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
-
-                    b.Property<string>("CommissionAccount")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
 
                     b.Property<int>("FeePermille")
                         .ValueGeneratedOnAdd()

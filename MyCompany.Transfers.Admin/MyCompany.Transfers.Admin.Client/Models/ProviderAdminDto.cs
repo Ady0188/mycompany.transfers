@@ -11,6 +11,9 @@ public sealed class ProviderAdminDto
     [JsonPropertyName("account")]
     public string Account { get; set; } = "";
 
+    [JsonPropertyName("commissionAccount")]
+    public string? CommissionAccount { get; set; }
+
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 

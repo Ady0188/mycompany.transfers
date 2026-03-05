@@ -65,13 +65,14 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
                 return AppErrors.Common.NotFound($"Услуга '{m.ServiceId}' не найдена.");
             }
 
-            if (agent.Balances is null || agent.Balances.Count == 0)
+            var balancesDto = await _agents.GetBalancesAsync(agent.Id, ct);
+            if (balancesDto is null || balancesDto.Balances.Count == 0)
             {
-                _logger.LogWarning("Для агента '{AgentId}' не найдено ни одной валюты баланса.", agent.Id);
+                _logger.LogWarning("Для агента '{AgentId}' не найдено ни одной валюты баланса (нет терминалов с балансом).", agent.Id);
                 return AppErrors.Common.Validation($"Для агента '{agent.Id}' не найдено ни одной валюты баланса.");
             }
 
-            var currency = agent.Balances.Keys.First();
+            var currency = balancesDto.Balances.First().Currency;
             if (!await _access.IsCurrencyAllowedAsync(m.AgentId, currency, ct))
             {
                 _logger.LogWarning("Агенту '{AgentId}' недоступна валюта '{Currency}'.", agent.Id, currency);
@@ -83,9 +84,11 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
 
             var providerReq = new ProviderRequest(Source: agent.Id,
                 SourceAccount: string.Empty,
+                SourceBankIncomeAccount: null,
                 SourceCurrency: string.Empty,
                 Destination: string.Empty,
                 DestinationAccount: string.Empty,
+                DestinationCommissionAccount: null,
                 SourceAmount: 0,
                 SourceFeeAmount: 0,
                 TotalAmount: 0,

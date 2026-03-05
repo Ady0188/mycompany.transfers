@@ -56,24 +56,10 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
 
     protected override void OnModelCreating(ModelBuilder b)
     {
-        var dictConv = new ValueConverter<Dictionary<string, long>, string>(
-            v => JsonSerializer.Serialize(v ?? new(), (JsonSerializerOptions?)null),
-            v => string.IsNullOrWhiteSpace(v)
-                ? new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-                : JsonSerializer.Deserialize<Dictionary<string, long>>(v, (JsonSerializerOptions?)null)!);
-
-        var dictComparer = new ValueComparer<Dictionary<string, long>>(
-            (a, b) => a != null && b != null && a.Count == b.Count &&
-                a.OrderBy(kv => kv.Key).SequenceEqual(b.OrderBy(kv => kv.Key)),
-            v => v == null ? 0 : v.Aggregate(0, (acc, kv) => HashCode.Combine(acc, kv.Key.GetHashCode(), kv.Value.GetHashCode())),
-            v => v == null ? new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) : v.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase));
-
         b.Entity<Agent>(eb =>
         {
             eb.HasKey(x => x.Id);
             eb.Property(x => x.Name).HasMaxLength(256);
-            eb.Property(x => x.Account).IsRequired().HasMaxLength(128);
-            eb.Property(x => x.Balances).HasConversion(dictConv).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb").Metadata.SetValueComparer(dictComparer);
             eb.Property(x => x.TimeZoneId).IsRequired().HasMaxLength(64).HasDefaultValue("Asia/Dushanbe");
             eb.Property(x => x.SettingsJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
             eb.Property(x => x.PartnerEmail).HasMaxLength(256);
@@ -84,6 +70,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
         {
             eb.HasKey(x => x.Id);
             eb.Property(x => x.AgentId).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.TerminalId).HasMaxLength(64).IsRequired();
             eb.Property(x => x.DocId).IsRequired(false);
             eb.Property(x => x.CreatedAtUtc).IsRequired();
             eb.Property(x => x.Currency).HasMaxLength(3).IsRequired();
@@ -93,11 +80,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.ReferenceType).HasConversion<string>().HasMaxLength(16).IsRequired();
             eb.Property(x => x.ReferenceId).HasMaxLength(128).IsRequired();
 
-            eb.HasIndex(x => new { x.AgentId, x.Currency, x.ReferenceType, x.ReferenceId })
+            eb.HasIndex(x => new { x.TerminalId, x.ReferenceType, x.ReferenceId })
                 .IsUnique()
-                .HasDatabaseName("IX_AgentBalanceHistory_AgentId_Currency_ReferenceType_ReferenceId");
-            eb.HasIndex(x => new { x.AgentId, x.Currency, x.CreatedAtUtc })
-                .HasDatabaseName("IX_AgentBalanceHistory_AgentId_Currency_CreatedAtUtc");
+                .HasDatabaseName("IX_AgentBalanceHistory_TerminalId_ReferenceType_ReferenceId");
+            eb.HasIndex(x => new { x.TerminalId, x.CreatedAtUtc })
+                .HasDatabaseName("IX_AgentBalanceHistory_TerminalId_CreatedAtUtc");
 
             eb.ToTable("AgentBalanceHistory");
         });
@@ -106,6 +93,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
         {
             eb.HasKey(x => x.Id);
             eb.Property(x => x.AgentId).HasMaxLength(64).IsRequired();
+            eb.Property(x => x.TerminalId).HasMaxLength(64).IsRequired();
             eb.Property(x => x.Date).IsRequired();
             eb.Property(x => x.Currency).HasMaxLength(3).IsRequired();
             eb.Property(x => x.OpeningBalanceMinor).HasColumnType("bigint").IsRequired();
@@ -113,9 +101,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.Property(x => x.TimeZoneId).HasMaxLength(64).IsRequired();
             eb.Property(x => x.Scope).HasConversion<string>().HasMaxLength(16).IsRequired();
 
-            eb.HasIndex(x => new { x.AgentId, x.Currency, x.Date, x.TimeZoneId, x.Scope })
+            eb.HasIndex(x => new { x.TerminalId, x.Date, x.TimeZoneId, x.Scope })
                 .IsUnique()
-                .HasDatabaseName("IX_AgentDailyBalance_AgentId_Currency_Date_TimeZoneId_Scope");
+                .HasDatabaseName("IX_AgentDailyBalance_TerminalId_Date_TimeZoneId_Scope");
             eb.HasIndex(x => new { x.AgentId, x.Date })
                 .HasDatabaseName("IX_AgentDailyBalance_AgentId_Date");
 
@@ -126,6 +114,10 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
         {
             eb.HasKey(x => x.Id);
             eb.Property(x => x.AgentId).IsRequired().HasMaxLength(64);
+            eb.Property(x => x.Account).IsRequired().HasMaxLength(128);
+            eb.Property(x => x.BankIncomeAccount).HasMaxLength(128);
+            eb.Property(x => x.Currency).IsRequired().HasMaxLength(3);
+            eb.Property(x => x.BalanceMinor).HasColumnType("bigint").IsRequired().HasDefaultValue(0L);
             var enc = CredentialsEncryptionHolder.Encryption;
             if (enc != null)
             {
@@ -241,6 +233,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             eb.HasKey(x => x.Id);
             eb.Property(x => x.Id).HasMaxLength(64).IsRequired();
             eb.Property(x => x.Account).IsRequired().HasMaxLength(128);
+            eb.Property(x => x.CommissionAccount).HasMaxLength(128);
             eb.Property(x => x.Name).HasMaxLength(128).IsRequired();
             eb.Property(x => x.BaseUrl).HasMaxLength(512).IsRequired();
             eb.Property(x => x.TimeoutSeconds).HasDefaultValue(30);

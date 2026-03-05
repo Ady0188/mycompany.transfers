@@ -10,6 +10,9 @@ namespace MyCompany.Transfers.Application.Terminals.Commands;
 public sealed record CreateTerminalCommand(
     string AgentId,
     string Name,
+    string Account,
+    string? BankIncomeAccount,
+    string Currency,
     string ApiKey,
     bool Active = true) : IRequest<ErrorOr<TerminalAdminDto>>;
 
@@ -33,7 +36,7 @@ public sealed class CreateTerminalCommandHandler : IRequestHandler<CreateTermina
 
         var id = Guid.NewGuid().ToString("N");
         var secret = SecretGenerator.GenerateTerminalSecret();
-        var terminal = Terminal.Create(id, cmd.AgentId, cmd.Name, cmd.ApiKey, secret, cmd.Active);
+        var terminal = Terminal.Create(id, cmd.AgentId, cmd.Name, cmd.Account, cmd.BankIncomeAccount, cmd.Currency, cmd.ApiKey, secret, cmd.Active);
 
         await _uow.ExecuteTransactionalAsync(_ =>
         {

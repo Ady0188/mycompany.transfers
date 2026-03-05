@@ -34,6 +34,9 @@
                 <MudTh>Id</MudTh>
                 <MudTh>Агент</MudTh>
                 <MudTh>Название</MudTh>
+                <MudTh>Счёт</MudTh>
+                <MudTh>Валюта</MudTh>
+                <MudTh>Баланс</MudTh>
                 <MudTh>Активен</MudTh>
                 <MudTh Style="width: 180px;">Действия</MudTh>
             </HeaderContent>
@@ -41,6 +44,9 @@
                 <MudTd DataLabel="Id">@context.Id</MudTd>
                 <MudTd DataLabel="Агент">@context.AgentId</MudTd>
                 <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
+                <MudTd DataLabel="Счёт">@(context.Account ?? "—")</MudTd>
+                <MudTd DataLabel="Валюта">@(context.Currency ?? "—")</MudTd>
+                <MudTd DataLabel="Баланс">@context.BalanceMinor</MudTd>
                 <MudTd DataLabel="Активен">@(context.Active ? "Да" : "Нет")</MudTd>
                 <MudTd DataLabel="Действия">
                     <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" OnClick="@(() => OpenSendCredentials(context))" title="Отправить данные на почту" />

@@ -11,9 +11,6 @@ public sealed class AgentAdminDto
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
-    [JsonPropertyName("account")]
-    public string Account { get; set; } = "";
-
     [JsonPropertyName("timeZoneId")]
     public string TimeZoneId { get; set; } = "";
 

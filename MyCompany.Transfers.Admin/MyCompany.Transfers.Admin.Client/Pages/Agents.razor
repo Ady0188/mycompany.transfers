@@ -33,7 +33,6 @@
             <HeaderContent>
                 <MudTh>Id</MudTh>
                 <MudTh>Название</MudTh>
-                <MudTh>Счёт</MudTh>
                 <MudTh>Часовой пояс</MudTh>
                 <MudTh>Локаль</MudTh>
                 <MudTh Style="width: 120px;">Действия</MudTh>
@@ -41,7 +40,6 @@
             <RowTemplate>
                 <MudTd DataLabel="Id">@context.Id</MudTd>
                 <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
-                <MudTd DataLabel="Счёт">@context.Account</MudTd>
                 <MudTd DataLabel="Часовой пояс">@TimeZoneService.GetDisplayName(context.TimeZoneId)</MudTd>
                 <MudTd DataLabel="Локаль">@((context.Locale ?? "ru").ToUpperInvariant())</MudTd>
                 <MudTd DataLabel="Действия">
@@ -116,7 +114,7 @@
 
     private async Task OpenCreate()
     {
-        var dto = new AgentAdminDto { Id = "", Name = "", Account = "", TimeZoneId = "UTC", SettingsJson = "", PartnerEmail = null, Locale = "ru" };
+        var dto = new AgentAdminDto { Id = "", Name = "", TimeZoneId = "UTC", SettingsJson = "", PartnerEmail = null, Locale = "ru" };
         var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Новый агент", parameters, options);
@@ -127,7 +125,7 @@
 
     private async Task OpenEdit(AgentAdminDto item)
     {
-        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", Account = item.Account, TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "", PartnerEmail = item.PartnerEmail, Locale = string.IsNullOrWhiteSpace(item.Locale) ? "ru" : item.Locale };
+        var copy = new AgentAdminDto { Id = item.Id, Name = item.Name ?? "", TimeZoneId = item.TimeZoneId, SettingsJson = item.SettingsJson ?? "", PartnerEmail = item.PartnerEmail, Locale = string.IsNullOrWhiteSpace(item.Locale) ? "ru" : item.Locale };
         var parameters = new DialogParameters { ["Model"] = copy, ["IsCreate"] = false };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = await DialogService.ShowAsync<AgentEditDialog>("Изменить агента", parameters, options);

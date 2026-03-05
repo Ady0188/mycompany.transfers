@@ -28,6 +28,7 @@ internal sealed class TransferToABSIBTSenderWorker : BackgroundService
                 var providerRepo = scope.ServiceProvider.GetRequiredService<IProviderRepository>();
                 var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
                 var agentRepository = scope.ServiceProvider.GetRequiredService<IAgentReadRepository>();
+                var terminalRepository = scope.ServiceProvider.GetRequiredService<ITerminalRepository>();
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                 var succeeded = await outboxRepository.GetIBTSucceededAsync();
@@ -58,7 +59,7 @@ internal sealed class TransferToABSIBTSenderWorker : BackgroundService
                         }
 
                         var operation = settings.JobScenario.TryGetValue(transfer.Status, out var op) ? op : null;
-                        var agent = await agentRepository.GetByIdAsync(transfer.AgentId, ct);
+                        var terminal = await terminalRepository.GetAsync(transfer.TerminalId, ct);
 
                         if (operation is null)
                         {
@@ -67,21 +68,23 @@ internal sealed class TransferToABSIBTSenderWorker : BackgroundService
                                 new Dictionary<string, string>(),
                                 $"Operation '{operation}' not configured for provider '{provider.Id}'");
                         }
-                        else if (agent is null)
+                        else if (terminal is null)
                         {
                             providerResult = new ProviderResult(
                                 OutboxStatus.SETTING,
                                 new Dictionary<string, string>(),
-                                $"Agent with id '{transfer.AgentId}' not found");
+                                $"Terminal '{transfer.TerminalId}' not found");
                         }
                         else
                         {
                             var providerRequest = new ProviderRequest(
                                 Source: transfer.Source,
-                                SourceAccount: agent.Account,
-                                SourceCurrency: transfer.Amount.Currency,
+                                SourceAccount: terminal.Account,
+                                SourceBankIncomeAccount: terminal.BankIncomeAccount,
+                                SourceCurrency: terminal.Currency,
                                 Destination: destination.Name,
                                 DestinationAccount: string.Empty,
+                                DestinationCommissionAccount: destination.CommissionAccount,
                                 Operation: operation,
                                 TransferId: transfer.TransferId.ToString(),
                                 NumId: transfer.NumId,

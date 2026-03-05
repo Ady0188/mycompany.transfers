@@ -42,6 +42,7 @@ public sealed class ProvidersController : BaseController
         var cmd = new CreateProviderCommand(
             dto.Id,
             dto.Account,
+            dto.CommissionAccount,
             dto.Name,
             dto.BaseUrl,
             dto.TimeoutSeconds,
@@ -59,6 +60,7 @@ public sealed class ProvidersController : BaseController
         var cmd = new UpdateProviderCommand(
             id,
             dto.Account,
+            dto.CommissionAccount,
             dto.Name,
             dto.BaseUrl,
             dto.TimeoutSeconds,

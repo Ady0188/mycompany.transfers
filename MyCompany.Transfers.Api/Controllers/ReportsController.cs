@@ -199,4 +199,22 @@ public sealed class ReportsController : BaseController
             : TransfersReportExportHelper.ToCsv(result);
         return File(content, contentType, fileName);
     }
+
+    /// <summary>Отчет по переводам внутри Таджикистана по картам (IPS, FIMI) в разрезе банков.</summary>
+    [HttpGet("by-bank-cards")]
+    public async Task<IActionResult> GetByBankCards(
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        [FromQuery] string? agentId,
+        [FromQuery] string? amountCurrency,
+        [FromQuery] string? providerId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
+    {
+        if (ValidatePeriod(from, to) is { } err) return err;
+        var filter = new TransfersCommonReportFilter(from, to, null, agentId, providerId, null, amountCurrency);
+        var result = await _mediator.Send(new GetTransfersByBankReportQuery(filter, page, pageSize), ct);
+        return Ok(result);
+    }
 }

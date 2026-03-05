@@ -116,7 +116,7 @@
 
     private async Task OpenCreate()
     {
-        var dto = new ProviderAdminDto { Id = "", Account = "", Name = "", BaseUrl = "", TimeoutSeconds = 30, AuthType = 0, SettingsJson = "{}", IsEnabled = true, FeePermille = 0 };
+        var dto = new ProviderAdminDto { Id = "", Account = "", CommissionAccount = null, Name = "", BaseUrl = "", TimeoutSeconds = 30, AuthType = 0, SettingsJson = "{}", IsEnabled = true, FeePermille = 0 };
         var parameters = new DialogParameters { ["Model"] = dto, ["IsCreate"] = true };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge, FullWidth = true };
         var dialog = await DialogService.ShowAsync<ProviderEditDialog>("Новый провайдер", parameters, options);
@@ -129,7 +129,7 @@
     {
         var copy = new ProviderAdminDto
         {
-            Id = item.Id, Account = item.Account, Name = item.Name ?? "", BaseUrl = item.BaseUrl ?? "",
+            Id = item.Id, Account = item.Account, CommissionAccount = item.CommissionAccount, Name = item.Name ?? "", BaseUrl = item.BaseUrl ?? "",
             TimeoutSeconds = item.TimeoutSeconds, AuthType = item.AuthType, SettingsJson = item.SettingsJson ?? "{}",
             IsEnabled = item.IsEnabled, IsOnline = item.IsOnline, FeePermille = item.FeePermille
         };

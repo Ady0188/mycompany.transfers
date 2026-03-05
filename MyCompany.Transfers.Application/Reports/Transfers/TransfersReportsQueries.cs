@@ -28,3 +28,9 @@ public sealed record GetTransfersRevenueReportQuery(
     int PageSize = 50)
     : IRequest<TransfersReportResult<TransfersRevenueReportItemDto>>;
 
+public sealed record GetTransfersByBankReportQuery(
+    TransfersCommonReportFilter Filter,
+    int Page = 1,
+    int PageSize = 50)
+    : IRequest<TransfersReportResult<TransfersByBankReportItemDto>>;
+

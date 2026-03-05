@@ -14,7 +14,15 @@ public sealed class TerminalListDto
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
+    [JsonPropertyName("account")]
+    public string Account { get; set; } = "";
+
+    [JsonPropertyName("currency")]
+    public string Currency { get; set; } = "";
+
+    [JsonPropertyName("balanceMinor")]
+    public long BalanceMinor { get; set; }
+
     [JsonPropertyName("active")]
     public bool Active { get; set; } = true;
-
 }

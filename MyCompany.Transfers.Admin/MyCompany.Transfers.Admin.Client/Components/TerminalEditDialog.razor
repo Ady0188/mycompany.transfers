@@ -39,6 +39,29 @@
                     <MudTextField @bind-Value="_model.Name" Variant="Variant.Outlined" Immediate="true" />
                 </MudItem>
 
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Счёт списания <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Account" Variant="Variant.Outlined" Required="true" RequiredError="Введите счёт" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Счёт дохода банка</MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.BankIncomeAccount" Variant="Variant.Outlined" Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Валюта <span class="text-error">*</span></MudText></MudItem>
+                <MudItem xs="12" md="7">
+                    <MudTextField @bind-Value="_model.Currency" Variant="Variant.Outlined" Required="true" RequiredError="Введите валюту (3 символа)" Immediate="true" MaxLength="3" />
+                </MudItem>
+
+                @if (!_isCreate)
+                {
+                    <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">Баланс (минорные ед.)</MudText></MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudTextField Value="_model.BalanceMinor" Variant="Variant.Outlined" ReadOnly="true" Immediate="true" />
+                    </MudItem>
+                }
+
                 <MudItem xs="12" md="5"><MudText Typo="Typo.body2" Class="d-flex align-center" Style="height: 56px;">ApiKey <span class="text-error">*</span></MudText></MudItem>
                 <MudItem xs="12" md="7">
                     <MudTextField @bind-Value="_model.ApiKey" Variant="Variant.Outlined" Required="true" RequiredError="Введите ApiKey" Immediate="true" InputType="InputType.Password" />
@@ -92,6 +115,10 @@
             Id = Model.Id ?? "",
             AgentId = Model.AgentId ?? "",
             Name = Model.Name ?? "",
+            Account = Model.Account ?? "",
+            BankIncomeAccount = Model.BankIncomeAccount,
+            Currency = Model.Currency ?? "",
+            BalanceMinor = Model.BalanceMinor,
             ApiKey = Model.ApiKey ?? "",
             Secret = "", // не передаётся: при создании генерируется на бэкенде, при редактировании не меняется
             Active = Model.Active

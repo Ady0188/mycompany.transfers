@@ -11,6 +11,7 @@ public interface IReportsApiService
     Task<TransfersReportResultModel<TransfersByProviderReportItemModel>> GetTransfersByProviderAsync(TransfersReportFilterModel filter, int page, int pageSize, CancellationToken ct = default);
     Task<TransfersReportResultModel<TransfersRevenueReportItemModel>> GetTransfersRevenueAsync(TransfersReportFilterModel filter, int page, int pageSize, CancellationToken ct = default);
     Task<(byte[] Content, string FileName)> GetExportFileAsync(TransfersReportType reportType, TransfersReportFilterModel filter, string format, CancellationToken ct = default);
+    Task<TransfersReportResultModel<TransfersByBankReportItemModel>> GetTransfersByBankCardsAsync(TransfersReportFilterModel filter, int page, int pageSize, CancellationToken ct = default);
 }
 
 public sealed class ReportsApiService : IReportsApiService
@@ -132,6 +133,20 @@ public sealed class ReportsApiService : IReportsApiService
         }
         var result = await response.Content.ReadFromJsonAsync<TransfersReportResultModel<TransfersRevenueReportItemModel>>(JsonOptions, ct);
         return result ?? new TransfersReportResultModel<TransfersRevenueReportItemModel>();
+    }
+
+    public async Task<TransfersReportResultModel<TransfersByBankReportItemModel>> GetTransfersByBankCardsAsync(TransfersReportFilterModel filter, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = BuildCommonQuery(filter, page, pageSize);
+        var url = "api/admin/reports/transfers/by-bank-cards?" + query;
+        var response = await Api().GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var msg = await ApiErrorHelper.ReadErrorAsync(response);
+            throw new HttpRequestException($"Запрос отчета (переводы по банкам, карты IPS/FIMI) не выполнен ({(int)response.StatusCode}): {msg ?? response.ReasonPhrase}");
+        }
+        var result = await response.Content.ReadFromJsonAsync<TransfersReportResultModel<TransfersByBankReportItemModel>>(JsonOptions, ct);
+        return result ?? new TransfersReportResultModel<TransfersByBankReportItemModel>();
     }
 
     public async Task<(byte[] Content, string FileName)> GetExportFileAsync(TransfersReportType reportType, TransfersReportFilterModel filter, string format, CancellationToken ct = default)

@@ -11,25 +11,23 @@ public sealed class AgentBalanceHistoryRepository : IAgentBalanceHistoryReposito
 
     public AgentBalanceHistoryRepository(AppDbContext db) => _db = db;
 
-    public async Task<AgentBalanceHistory?> GetByDocIdAsync(string agentId, string currency, long docId, CancellationToken ct)
+    public async Task<AgentBalanceHistory?> GetByDocIdAsync(string terminalId, long docId, CancellationToken ct)
     {
         return await _db.AgentBalanceHistories
             .AsNoTracking()
             .Where(x =>
-                x.AgentId == agentId &&
-                x.Currency == currency &&
+                x.TerminalId == terminalId &&
                 x.ReferenceType == BalanceHistoryReferenceType.AbsDocument &&
                 x.ReferenceId == docId.ToString())
             .OrderByDescending(x => x.CreatedAtUtc)
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<bool> ExistsByReferenceAsync(string agentId, string currency, BalanceHistoryReferenceType referenceType, string referenceId, CancellationToken ct)
+    public async Task<bool> ExistsByReferenceAsync(string terminalId, BalanceHistoryReferenceType referenceType, string referenceId, CancellationToken ct)
     {
         return await _db.AgentBalanceHistories
             .AnyAsync(x =>
-                x.AgentId == agentId &&
-                x.Currency == currency &&
+                x.TerminalId == terminalId &&
                 x.ReferenceType == referenceType &&
                 x.ReferenceId == referenceId, ct);
     }
