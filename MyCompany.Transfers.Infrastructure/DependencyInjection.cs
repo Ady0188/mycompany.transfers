@@ -30,8 +30,7 @@ public static class DependencyInjection
         var dataSource = builder.Build();
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure())
-                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
+            options.UseNpgsql(dataSource, npg => npg.EnableRetryOnFailure()));
 
         services.AddSingleton<IDbOracleConnectionFactory>(serviceProvider =>
             new OracleConnectionFactory(serviceProvider.GetRequiredService<IConfiguration>()["ConnectionStrings:OracleConnection"]!));
