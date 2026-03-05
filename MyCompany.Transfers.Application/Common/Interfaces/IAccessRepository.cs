@@ -17,11 +17,4 @@ public interface IAccessRepository
     void Add(AgentServiceAccess entity);
     void Update(AgentServiceAccess entity);
     void Remove(AgentServiceAccess entity);
-
-    Task<IReadOnlyList<AgentCurrencyAccess>> GetAllAgentCurrencyAccessAsync(CancellationToken ct);
-    Task<AgentCurrencyAccess?> GetAgentCurrencyAccessForUpdateAsync(string agentId, string currency, CancellationToken ct);
-    Task<bool> ExistsAgentCurrencyAccessAsync(string agentId, string currency, CancellationToken ct);
-    void Add(AgentCurrencyAccess entity);
-    void Update(AgentCurrencyAccess entity);
-    void Remove(AgentCurrencyAccess entity);
 }

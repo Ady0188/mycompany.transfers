@@ -30,7 +30,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<Outbox> Outboxes => Set<Outbox>();
     public DbSet<Provider> Providers => Set<Provider>();
-    public DbSet<AgentCurrencyAccess> AgentCurrencies => Set<AgentCurrencyAccess>();
     public DbSet<AgentServiceAccess> AgentServices => Set<AgentServiceAccess>();
     public DbSet<FxRate> FxRates => Set<FxRate>();
     public DbSet<Bin> Bins => Set<Bin>();
@@ -209,14 +208,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
 
         ConfigureTransfer(b, dictConverter);
         ConfigureOutbox(b, dictConverter);
-
-        b.Entity<AgentCurrencyAccess>(eb =>
-        {
-            eb.HasKey(x => new { x.AgentId, x.Currency });
-            eb.Property(x => x.AgentId).HasMaxLength(64).IsRequired();
-            eb.Property(x => x.Currency).HasMaxLength(3).IsRequired();
-            eb.ToTable("AgentCurrencyAccess");
-        });
 
         b.Entity<AgentServiceAccess>(eb =>
         {

@@ -24,7 +24,6 @@ builder.Services.AddScoped<ITerminalsApiService, TerminalsApiService>();
 builder.Services.AddScoped<IParametersApiService, ParametersApiService>();
 builder.Services.AddScoped<IBinsApiService, BinsApiService>();
 builder.Services.AddScoped<IAgentServiceAccessApiService, AgentServiceAccessApiService>();
-builder.Services.AddScoped<IAgentCurrencyAccessApiService, AgentCurrencyAccessApiService>();
 builder.Services.AddScoped<IFxRatesApiService, FxRatesApiService>();
 builder.Services.AddScoped<ITransfersApiService, TransfersApiService>();
 builder.Services.AddScoped<IReportsApiService, ReportsApiService>();
