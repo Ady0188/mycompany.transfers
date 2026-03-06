@@ -33,7 +33,10 @@ public sealed class GetTerminalsQueryHandler : IRequestHandler<GetTerminalsQuery
         var page = Math.Max(1, request.Page);
         var pageSize = request.PageSize <= 0 ? 10 : Math.Min(request.PageSize, 100);
         var items = allList.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-
+        foreach (var item in list)
+        {
+            Console.WriteLine(item.ApiKey);
+        }
         return new PagedResult<TerminalListDto>
         {
             Items = items,

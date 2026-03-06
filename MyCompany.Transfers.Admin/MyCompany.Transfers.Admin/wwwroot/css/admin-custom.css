@@ -36,6 +36,18 @@
     min-height: 100vh;
 }
 
+/* Крупнее подписи на графиках дашборда */
+.dashboard-chart {
+    font-size: 14px;
+}
+
+/* Увеличить шрифт осей и подписей MudChart только внутри дашборда */
+.dashboard-chart svg g.mud-charts-xaxis > text,
+.dashboard-chart svg g.mud-charts-yaxis > text {
+    font-size: 14px;
+    fill: #222;
+}
+
 /* --- Стили из MainLayout (шаблонные + blazor-error-ui) --- */
 
 .page {

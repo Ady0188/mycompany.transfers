@@ -7,41 +7,6 @@
 <PageTitle>Главная — Админ-панель</PageTitle>
 
 <MudStack Spacing="4">
-    <MudText Typo="Typo.h4" Class="mb-2 font-weight-medium" GutterBottom="true">
-        Добро пожаловать
-    </MudText>
-    <MudGrid>
-        <MudItem xs="12" md="6">
-            <MudCard Elevation="2" Class="pa-4">
-                <MudCardContent>
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
-                        <MudAvatar Color="Color.Primary" Size="Size.Large">
-                            <MudIcon Icon="@Icons.Material.Filled.Settings" />
-                        </MudAvatar>
-                        <MudStack Class="ms-3">
-                            <MudText Typo="Typo.h6">MyCompany Transfers</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Административная панель</MudText>
-                        </MudStack>
-                    </MudStack>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        Управление справочниками: агенты, провайдеры, услуги, терминалы, параметры, определения счетов, права доступа и курсы валют.
-                    </MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-        <MudItem xs="12" md="6">
-            <MudCard Elevation="2" Class="pa-4 fill-height" Style="background: linear-gradient(135deg, rgba(21, 101, 192, 0.08) 0%, rgba(0, 172, 193, 0.06) 100%);">
-                <MudCardContent>
-                    <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Primary" Class="mb-2" />
-                    <MudText Typo="Typo.subtitle1" Class="font-weight-medium mb-2">Быстрый старт</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        Используйте меню слева для перехода к разделам. Для работы с API необходим JWT-токен с правами администратора.
-                    </MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-    </MudGrid>
-
     <MudText Typo="Typo.h5" Class="mt-4 mb-2">Дашборд переводов</MudText>
 
     <MudGrid Class="mb-2">
@@ -67,7 +32,7 @@
 
     <MudGrid>
         <MudItem xs="12" md="8">
-            <MudCard Elevation="2" Class="pa-3">
+            <MudCard Elevation="2" Class="pa-3" Style="min-height:360px;">
                 <MudCardHeader>
                     <MudText Typo="Typo.subtitle1">Динамика переводов за 14 дней</MudText>
                 </MudCardHeader>
@@ -79,6 +44,8 @@
                     else
                     {
                         <MudChart ChartType="ChartType.Line"
+                                  Height="360px"
+                                  Class="dashboard-chart"
                                   ChartLabels="@_overview.Last14DaysLabels.ToArray()"
                                   ChartSeries="@_last14DaysSeries" />
                     }
@@ -86,7 +53,7 @@
             </MudCard>
         </MudItem>
         <MudItem xs="12" md="4">
-            <MudCard Elevation="2" Class="pa-3">
+            <MudCard Elevation="2" Class="pa-3" Style="min-height:360px;">
                 <MudCardHeader>
                     <MudText Typo="Typo.subtitle1">ТОП-5 провайдеров (7 дней)</MudText>
                 </MudCardHeader>
@@ -98,6 +65,8 @@
                     else
                     {
                         <MudChart ChartType="ChartType.Bar"
+                                  Height="360px"
+                                  Class="dashboard-chart"
                                   ChartLabels="@_overview.TopProvidersLabels.ToArray()"
                                   ChartSeries="@_topProvidersSeries" />
                     }
