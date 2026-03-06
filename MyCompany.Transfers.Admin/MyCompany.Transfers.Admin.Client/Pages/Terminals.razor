@@ -46,7 +46,7 @@
                 <MudTd DataLabel="Название">@(context.Name ?? "—")</MudTd>
                 <MudTd DataLabel="Счёт">@(context.Account ?? "—")</MudTd>
                 <MudTd DataLabel="Валюта">@(context.Currency ?? "—")</MudTd>
-                <MudTd DataLabel="Баланс">@context.BalanceMinor</MudTd>
+                <MudTd DataLabel="Баланс">@FormatBalance(context.BalanceMinor, context.Currency)</MudTd>
                 <MudTd DataLabel="Активен">@(context.Active ? "Да" : "Нет")</MudTd>
                 <MudTd DataLabel="Действия">
                     <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" OnClick="@(() => OpenSendCredentials(context))" title="Отправить данные на почту" />
@@ -66,6 +66,16 @@
     private bool _loading;
     private string _search = "";
     private int _filterVersion;
+
+    private static string FormatBalance(long minor, string currency)
+    {
+        if (string.IsNullOrWhiteSpace(currency))
+        {
+            return (minor / 100m).ToString("N2");
+        }
+
+        return $"{minor / 100m:N2} {currency}";
+    }
 
     private async Task<TableData<TerminalListDto>> LoadServerData(TableState state, CancellationToken ct)
     {

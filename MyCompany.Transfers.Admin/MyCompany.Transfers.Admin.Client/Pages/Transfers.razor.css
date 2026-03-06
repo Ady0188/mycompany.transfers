@@ -1,0 +1,50 @@
+.transfers-table .mud-table-head th {
+    white-space: nowrap;
+}
+
+.transfers-table .col-id {
+    width: 90px;
+}
+
+.transfers-table .col-external {
+    width: 140px;
+}
+
+.transfers-table .col-agent,
+.transfers-table .col-provider,
+.transfers-table .col-service {
+    min-width: 160px;
+}
+
+.transfers-table .col-date {
+    width: 160px;
+    white-space: nowrap;
+}
+
+.transfers-table .col-status {
+    width: 140px;
+}
+
+.transfers-table .col-account {
+    min-width: 180px;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transfers-table .col-amount {
+    width: 140px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.transfers-table .col-rate {
+    width: 90px;
+    text-align: right;
+}
+
+.transfers-table .status-chip {
+    font-weight: 500;
+}
+

@@ -60,10 +60,9 @@
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" sm="6" md="4">
-                        <MudText Typo="Typo.caption" Class="mb-1">Период (дата создания)</MudText>
                         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                            <MudDatePicker @bind-Date="_periodStart" Label="С" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
-                            <MudDatePicker @bind-Date="_periodEnd" Label="По" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                            <MudDatePicker @bind-Date="_periodStart" Label="Период с" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                            <MudDatePicker @bind-Date="_periodEnd" Label="Период по" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
                         </MudStack>
                     </MudItem>
                     <MudItem xs="12">
@@ -85,36 +84,44 @@
             <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
         }
 
-        <MudTable T="TransferAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true">
+        <MudTable T="TransferAdminDto" @key="_filterVersion" ServerData="LoadServerData" Loading="false" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true" Striped="true" FixedHeader="true" Class="transfers-table">
             <HeaderContent>
-                <MudTh>Id</MudTh>
-                <MudTh>ExternalId</MudTh>
-                <MudTh>Агент</MudTh>
-                <MudTh>Провайдер</MudTh>
-                <MudTh>Услуга</MudTh>
-                <MudTh>Дата создания</MudTh>
-                <MudTh>Статус</MudTh>
-                <MudTh>Акаунт</MudTh>
-                <MudTh>Сумма (source)</MudTh>
-                <MudTh>Комиссия</MudTh>
-                <MudTh>Сумма зачисления</MudTh>
-                <MudTh>Комиссия провайдера</MudTh>
-                <MudTh>Курс</MudTh>
+                <MudTh Class="col-id">Id</MudTh>
+                <MudTh Class="col-external">ExternalId</MudTh>
+                <MudTh Class="col-agent">Агент</MudTh>
+                <MudTh Class="col-provider">Провайдер</MudTh>
+                <MudTh Class="col-service">Услуга</MudTh>
+                <MudTh Class="col-date">Дата создания</MudTh>
+                <MudTh Class="col-status">Статус</MudTh>
+                <MudTh Class="col-account">Акаунт</MudTh>
+                <MudTh Class="col-amount">Сумма (source)</MudTh>
+                <MudTh Class="col-amount">Комиссия</MudTh>
+                <MudTh Class="col-amount">Сумма зачисления</MudTh>
+                <MudTh Class="col-amount">Комиссия провайдера</MudTh>
+                <MudTh Class="col-rate">Курс</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Id">@context.Id.ToString("N")[..8]</MudTd>
-                <MudTd DataLabel="ExternalId">@context.ExternalId</MudTd>
-                <MudTd DataLabel="Агент">@(context.AgentName ?? context.AgentId)</MudTd>
-                <MudTd DataLabel="Провайдер">@(context.ProviderName ?? context.ProviderId ?? "—")</MudTd>
-                <MudTd DataLabel="Услуга">@(context.ServiceName ?? context.ServiceId)</MudTd>
-                <MudTd DataLabel="Дата создания">@FormatDate(context.CreatedAtUtc)</MudTd>
-                <MudTd DataLabel="Статус">@context.Status</MudTd>
-                <MudTd DataLabel="Акаунт">@context.Account</MudTd>
-                <MudTd DataLabel="Сумма">@FormatMoney(context.AmountMinor, context.AmountCurrency)</MudTd>
-                <MudTd DataLabel="Комиссия">@FormatMoney(context.FeeMinor, context.FeeCurrency)</MudTd>
-                <MudTd DataLabel="Зачисление">@FormatMoney(context.CreditedAmountMinor, context.CreditedAmountCurrency)</MudTd>
-                <MudTd DataLabel="Ком. провайдера">@FormatMoney(context.ProviderFeeMinor, context.ProviderFeeCurrency)</MudTd>
-                <MudTd DataLabel="Курс">@(context.ExchangeRate.HasValue ? context.ExchangeRate.Value.ToString("N4") : "—")</MudTd>
+                <MudTd DataLabel="Id" Class="col-id">@context.Id.ToString("N")[..8]</MudTd>
+                <MudTd DataLabel="ExternalId" Class="col-external">@context.ExternalId</MudTd>
+                <MudTd DataLabel="Агент" Class="col-agent">@(context.AgentName ?? context.AgentId)</MudTd>
+                <MudTd DataLabel="Провайдер" Class="col-provider">@(context.ProviderName ?? context.ProviderId ?? "—")</MudTd>
+                <MudTd DataLabel="Услуга" Class="col-service">@(context.ServiceName ?? context.ServiceId)</MudTd>
+                <MudTd DataLabel="Дата создания" Class="col-date">@FormatDate(context.CreatedAtUtc)</MudTd>
+                <MudTd DataLabel="Статус" Class="col-status">
+                    <MudChip T="string"
+                             Color="@GetStatusColor(context.Status)"
+                             Variant="Variant.Filled"
+                             Size="Size.Small"
+                             Class="status-chip">
+                        @GetStatusLabel(context.Status)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Акаунт" Class="col-account">@context.Account</MudTd>
+                <MudTd DataLabel="Сумма" Class="col-amount">@FormatMoney(context.AmountMinor, context.AmountCurrency)</MudTd>
+                <MudTd DataLabel="Комиссия" Class="col-amount">@FormatMoney(context.FeeMinor, context.FeeCurrency)</MudTd>
+                <MudTd DataLabel="Зачисление" Class="col-amount">@FormatMoney(context.CreditedAmountMinor, context.CreditedAmountCurrency)</MudTd>
+                <MudTd DataLabel="Ком. провайдера" Class="col-amount">@FormatMoney(context.ProviderFeeMinor, context.ProviderFeeCurrency)</MudTd>
+                <MudTd DataLabel="Курс" Class="col-rate">@(context.ExchangeRate.HasValue ? context.ExchangeRate.Value.ToString("N4") : "—")</MudTd>
             </RowTemplate>
             <PagerContent>
                 <MudTablePager PageSizeOptions="new int[] { 10, 25, 50 }"
@@ -173,6 +180,32 @@
         if (string.IsNullOrEmpty(currency)) return minor.ToString();
         return $"{minor / 100m:N2} {currency}";
     }
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "NEW" => Color.Info,
+        "PREPARED" => Color.Info,
+        "CONFIRMED" => Color.Warning,
+        "SUCCESS" => Color.Success,
+        "TECHNICAL" => Color.Warning,
+        "FAILED" => Color.Error,
+        "EXPIRED" => Color.Dark,
+        "FRAUD" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStatusLabel(string status) => status switch
+    {
+        "NEW" => "Новый",
+        "PREPARED" => "Подготовлен",
+        "CONFIRMED" => "Подтверждён",
+        "SUCCESS" => "Успешно",
+        "TECHNICAL" => "Тех. ошибка",
+        "FAILED" => "Ошибка",
+        "EXPIRED" => "Истёк",
+        "FRAUD" => "Подозрение на мошенничество",
+        _ => status
+    };
 
     private static string FormatDate(DateTimeOffset d) => d.UtcDateTime.ToString("yyyy-MM-dd HH:mm");
 
