@@ -14,6 +14,7 @@ public sealed record SendTerminalCredentialsCommand(
 
 public sealed class SendTerminalCredentialsCommandHandler : IRequestHandler<SendTerminalCredentialsCommand, ErrorOr<SendCredentialsResult>>
 {
+    private readonly IAgentReadRepository _agents;
     private readonly ITerminalRepository _terminals;
     private readonly ITerminalCredentialsEmailSender _emailSender;
     private readonly ITerminalCredentialsArchiveBuilder _archiveBuilder;
@@ -25,13 +26,15 @@ public sealed class SendTerminalCredentialsCommandHandler : IRequestHandler<Send
         ITerminalCredentialsEmailSender emailSender,
         ITerminalCredentialsArchiveBuilder archiveBuilder,
         ISentCredentialsEmailRepository sentHistory,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IAgentReadRepository agents)
     {
         _terminals = terminals;
         _emailSender = emailSender;
         _archiveBuilder = archiveBuilder;
         _sentHistory = sentHistory;
         _uow = uow;
+        _agents = agents;
     }
 
     public async Task<ErrorOr<SendCredentialsResult>> Handle(SendTerminalCredentialsCommand request, CancellationToken ct)
@@ -43,11 +46,15 @@ public sealed class SendTerminalCredentialsCommandHandler : IRequestHandler<Send
         if (string.IsNullOrWhiteSpace(request.ToEmail))
             return Error.Validation("SendCredentials.ToEmail", "Укажите адрес получателя.");
 
+        var agent = await _agents.GetByIdAsync(terminal.AgentId, ct);
+        if (agent is null)
+            return AppErrors.Common.NotFound($"Агент '{terminal.AgentId}' не найден.");
+
         var subject = string.IsNullOrWhiteSpace(request.Subject)
-            ? $"Данные терминала {terminal.Name} ({terminal.Id})"
+            ? $"Данные терминала {terminal.Name}"
             : request.Subject;
 
-        var (zipStream, password) = _archiveBuilder.Build(terminal);
+        var (zipStream, password) = _archiveBuilder.Build(agent, terminal);
         var fileName = $"credentials.zip";
         try
         {

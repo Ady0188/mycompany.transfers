@@ -6,5 +6,5 @@ namespace MyCompany.Transfers.Application.Common.Interfaces;
 public interface ITerminalCredentialsArchiveBuilder
 {
     /// <summary>Собрать ZIP с JSON данных терминала, зашифровать паролем AES-256. Возвращает поток архива и сгенерированный пароль (передать партнёру другим каналом).</summary>
-    (Stream ZipStream, string GeneratedPassword) Build(Terminal terminal);
+    (Stream ZipStream, string GeneratedPassword) Build(Agent agent, Terminal terminal);
 }

@@ -116,7 +116,7 @@ public sealed class PayPorterClient : IProviderClient
 
         _logger.LogInformation($"Exchange response: {responseContent}, HttpsStatus: {response.StatusCode}");
 
-        var result = JsonSerializer.Deserialize<ExchangeResponse>(responseContent);
+        var result = responseContent.Deserialize<ExchangeResponse>();
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
             (result is not null && !result.Header.Success && result.Header.Message.Contains("LOGOUT")))
@@ -134,7 +134,7 @@ public sealed class PayPorterClient : IProviderClient
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
 
-            result = JsonSerializer.Deserialize<ExchangeResponse>(responseContent);
+            result = responseContent.Deserialize<ExchangeResponse>();
         }
 
         if (result is null)
@@ -172,7 +172,7 @@ public sealed class PayPorterClient : IProviderClient
 
         _logger.LogInformation($"Create response: {responseContent}, HttpsStatus: {response.StatusCode}");
 
-        var result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+        var result = responseContent.Deserialize<CreateResponse>();
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
             (result is not null && !result.Header.Success && result.Header.Message.Contains("LOGOUT")))
@@ -190,7 +190,7 @@ public sealed class PayPorterClient : IProviderClient
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
 
-            result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+            result = responseContent.Deserialize<CreateResponse>();
         }
         
         if (result is null)
@@ -220,7 +220,7 @@ public sealed class PayPorterClient : IProviderClient
 
         _logger.LogInformation($"Status response: {responseContent}, HttpsStatus: {response.StatusCode}");
 
-        var result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+        var result = responseContent.Deserialize<StatusResponse>();
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
             (result is not null && !result.Header.Success && result.Header.Message.Contains("LOGOUT")))
@@ -237,7 +237,7 @@ public sealed class PayPorterClient : IProviderClient
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 return new ProviderResult(OutboxStatus.FAILED, new Dictionary<string, string>(), "Unauthorized");
 
-            result = JsonSerializer.Deserialize<CreateResponse>(responseContent);
+            result = responseContent.Deserialize<StatusResponse>();
         }
         
         if (result is null)
@@ -249,9 +249,22 @@ public sealed class PayPorterClient : IProviderClient
             statusDict["errorCode"] = result.Header.Message ?? "STATUS_FAILED";
             return new ProviderResult(OutboxStatus.FAILED, statusDict, result.Header.Message);
         }
+        else if (result.ResponseObject?.TransferStatus?.StatusCode is null)
+        {
+            statusDict["errorCode"] = "STATUS IS NULL";
+            return new ProviderResult(OutboxStatus.FAILED, statusDict, "No status code in response");
+        }
+
         var status = OutboxStatus.SUCCESS;
-        if (result.ResponseObject?.Status?.StatusCode is int code && code is not 0 and > 0)
+        var statusCode = result.ResponseObject?.TransferStatus?.StatusCode!;
+
+        if (statusCode == 10 || statusCode == 30)
             status = OutboxStatus.STATUS;
+        else if (statusCode == 40 || statusCode == 50 || statusCode == 60)
+        {
+            status = OutboxStatus.FAILED;
+            statusDict["errorCode"] = result.ResponseObject?.TransferStatus.StatusDescription ?? "STATUS_FAILED";
+        }
 
         return new ProviderResult(status, statusDict, null);
     }

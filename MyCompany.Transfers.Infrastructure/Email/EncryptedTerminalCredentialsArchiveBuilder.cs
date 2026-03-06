@@ -21,7 +21,7 @@ public sealed class EncryptedTerminalCredentialsArchiveBuilder : ITerminalCreden
         return new string(buf);
     }
 
-    public (Stream ZipStream, string GeneratedPassword) Build(Terminal terminal)
+    public (Stream ZipStream, string GeneratedPassword) Build(Agent agent, Terminal terminal)
     {
         try
         {
@@ -29,7 +29,8 @@ public sealed class EncryptedTerminalCredentialsArchiveBuilder : ITerminalCreden
 
             var payload = new
             {
-                terminal.AgentId,
+                agent.Name,
+                TerminalName = terminal.Name,
                 terminal.ApiKey,
                 terminal.Secret
             };
