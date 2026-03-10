@@ -52,14 +52,28 @@ public sealed class AesCredentialsEncryption : ICredentialsEncryption
     public string DecryptSecret(string encrypted)
     {
         if (string.IsNullOrEmpty(encrypted)) return "";
-        var combined = Convert.FromBase64String(encrypted);
-        if (combined.Length < 17) return "";
-        var iv = new byte[16];
-        var cipher = new byte[combined.Length - 16];
-        Buffer.BlockCopy(combined, 0, iv, 0, 16);
-        Buffer.BlockCopy(combined, 16, cipher, 0, cipher.Length);
-        var decrypted = DecryptAes(cipher, iv);
-        return Encoding.UTF8.GetString(decrypted);
+        try
+        {
+            var combined = Convert.FromBase64String(encrypted);
+            if (combined.Length < 17) return "";
+            var iv = new byte[16];
+            var cipher = new byte[combined.Length - 16];
+            Buffer.BlockCopy(combined, 0, iv, 0, 16);
+            Buffer.BlockCopy(combined, 16, cipher, 0, cipher.Length);
+            var decrypted = DecryptAes(cipher, iv);
+            return Encoding.UTF8.GetString(decrypted);
+        }
+        catch (CryptographicException)
+        {
+            // В продакшене могут остаться "старые" или повреждённые значения секрета.
+            // Для чтения терминалов важно не падать, поэтому просто возвращаем пустую строку.
+            return "";
+        }
+        catch (FormatException)
+        {
+            // Если строка не является корректной Base64 — воспринимаем как пустое значение.
+            return "";
+        }
     }
 
     private byte[] EncryptAes(byte[] plain, byte[] iv)
