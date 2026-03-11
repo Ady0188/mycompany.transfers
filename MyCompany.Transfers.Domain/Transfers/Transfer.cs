@@ -126,7 +126,7 @@ public sealed class Transfer : IAggregateRoot
         ResolvedParameters = new Dictionary<string, string>(_parameters)
     };
 
-    public PrepareResponseDto ToPrepareResponseDto(Agent agent, long remainingBalanceMinor)
+    public PrepareResponseDto ToPrepareResponseDto(Agent agent, long remainingBalanceMinor, IReadOnlyDictionary<string, string>? resolvedParametersOverride = null)
     {
         return new PrepareResponseDto
         {
@@ -139,14 +139,16 @@ public sealed class Transfer : IAggregateRoot
             Credit = new MoneyDto { Amount = CurrentQuote!.CreditedAmount.Minor, Currency = CurrentQuote!.CreditedAmount.Currency },
             QuotationId = CurrentQuote?.Id ?? "",
             ExpiresAt = new ResponseDateTimeInfo(CurrentQuote?.ExpiresAt ?? DateTimeOffset.UtcNow.AddMinutes(5), agent.TimeZoneId),
-            ResolvedParameters = new Dictionary<string, string>(_parameters),
+            ResolvedParameters = resolvedParametersOverride is null
+                ? new Dictionary<string, string>(_parameters)
+                : new Dictionary<string, string>(resolvedParametersOverride),
             Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingBalanceMinor, Currency = Amount.Currency } },
             Rate = Math.Round(CurrentQuote!.ExchangeRate ?? 0, 4),
             Status = Status.ToResponse()
         };
     }
 
-    public ConfirmResponseDto ToConfirmResponseDto(Agent agent, long remainingBalanceMinor)
+    public ConfirmResponseDto ToConfirmResponseDto(Agent agent, long remainingBalanceMinor, IReadOnlyDictionary<string, string>? resolvedParametersOverride = null)
     {
         return new ConfirmResponseDto
         {
@@ -159,7 +161,10 @@ public sealed class Transfer : IAggregateRoot
             Credit = new MoneyDto { Amount = CurrentQuote!.CreditedAmount.Minor, Currency = CurrentQuote!.CreditedAmount.Currency },
             Limits = new LimitInfoDto { Remaining = new MoneyDto { Amount = remainingBalanceMinor, Currency = Amount.Currency } },
             Status = Status.ToResponse(),
-            ConfirmedAt = new ResponseDateTimeInfo(ConfirmedAtUtc ?? DateTimeOffset.UtcNow, agent.TimeZoneId)
+            ConfirmedAt = new ResponseDateTimeInfo(ConfirmedAtUtc ?? DateTimeOffset.UtcNow, agent.TimeZoneId),
+            ResolvedParameters = resolvedParametersOverride is null
+                ? new Dictionary<string, string>(_parameters)
+                : new Dictionary<string, string>(resolvedParametersOverride)
         };
     }
 

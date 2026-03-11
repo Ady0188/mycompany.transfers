@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ErrorOr;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -55,6 +56,13 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
         _binRepository = binRepository;
     }
 
+    private static readonly JsonSerializerOptions AgentSettingsJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private const string OperationKeyConfirm = "Confirm";
+
     public async Task<ErrorOr<ConfirmResponseDto>> Handle(ConfirmCommand m, CancellationToken ct)
     {
         try
@@ -88,7 +96,18 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                     case TransferStatus.CONFIRMED:
                         _logger.LogInformation("ConfirmCommandHandler: transfer already confirmed ExternalId={ExternalId}, Id={Id}", m.ExternalId, transfer.Id);
                         var termForResponse = await _terminalRepository.GetAsync(transfer.TerminalId, ct);
-                        response = transfer.ToConfirmResponseDto(agent!, termForResponse?.BalanceMinor ?? 0);
+
+                        // Для повторного Confirm возвращаем те же ResolvedParameters,
+                        // отфильтрованные по текущим настройкам агента.
+                        var existingService = await _services.GetByIdAsync(transfer.ServiceId, ct);
+                        var visibleCodesExisting = existingService is null
+                            ? null
+                            : GetVisibleParameterCodesForAgent(agent!, OperationKeyConfirm);
+                        var resolvedExisting = existingService is null
+                            ? new Dictionary<string, string>(transfer.Parameters)
+                            : BuildResolvedParameters(existingService, transfer.Parameters, transfer.ProvReceivedParams ?? new Dictionary<string, string>(), visibleCodesExisting);
+
+                        response = transfer.ToConfirmResponseDto(agent!, termForResponse?.BalanceMinor ?? 0, resolvedExisting);
                         return true;
                     case TransferStatus.SUCCESS:
                     case TransferStatus.FAILED:
@@ -232,7 +251,14 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                     outbox.MarkCompleted(_clock.GetUtcNow(), OutboxStatus.SUCCESS);
                 }
 
-                response = transfer.ToConfirmResponseDto(agent, terminal.BalanceMinor);
+                // ResolvedParameters для Confirm:
+                // 1) параметры услуги (ServiceParamDefinition -> ParamDefinition.Code),
+                // 2) значения как из параметров перевода (transfer.Parameters), так и из полученных от провайдера (ProvReceivedParams),
+                // 3) (опционально) фильтрация по настройкам агента.
+                var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyConfirm);
+                var resolvedParameters = BuildResolvedParameters(service, transfer.Parameters, transfer.ProvReceivedParams ?? new Dictionary<string, string>(), visibleParamCodes);
+
+                response = transfer.ToConfirmResponseDto(agent, terminal.BalanceMinor, resolvedParameters);
 
                 return true;
             }, ct);
@@ -305,5 +331,74 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
             _logger.LogError(ex, "ConfirmCommandHandler: unexpected error AgentId={AgentId}, ExternalId={ExternalId}", m.AgentId, m.ExternalId);
             return AppErrors.Common.Unexpected();
         }
+    }
+    /// <summary>
+    /// Собирает ResolvedParameters для Confirm:
+    /// приоритетно берём значения из ProvReceivedParams (ответ провайдера),
+    /// при отсутствии — из параметров перевода (Parameters),
+    /// и дополнительно фильтруем по списку разрешённых кодов агента.
+    /// </summary>
+    private static Dictionary<string, string> BuildResolvedParameters(
+        Domain.Services.Service service,
+        IReadOnlyDictionary<string, string> transferParameters,
+        IReadOnlyDictionary<string, string> provReceivedParams,
+        ISet<string>? allowedCodes)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (service.Parameters is null) return parameters;
+
+        foreach (var serviceParam in service.Parameters)
+        {
+            var code = serviceParam.Parameter?.Code;
+            if (string.IsNullOrWhiteSpace(code)) continue;
+
+            if (allowedCodes is not null && !allowedCodes.Contains(code))
+                continue;
+
+            string? value = null;
+            if (provReceivedParams.TryGetValue(code, out var fromProv) && !string.IsNullOrWhiteSpace(fromProv))
+            {
+                value = fromProv;
+            }
+            else if (transferParameters.TryGetValue(code, out var fromTransfer) && !string.IsNullOrWhiteSpace(fromTransfer))
+            {
+                value = fromTransfer;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+                continue;
+
+            parameters[code] = value;
+        }
+
+        return parameters;
+    }
+
+    /// <summary>
+    /// Возвращает множество кодов параметров (ParamDefinition.Code), разрешённых агенту для указанной операции.
+    /// null означает отсутствие дополнительной фильтрации по агенту.
+    /// </summary>
+    private static ISet<string>? GetVisibleParameterCodesForAgent(Agent agent, string operationKey)
+    {
+        if (string.IsNullOrWhiteSpace(agent.SettingsJson))
+            return null;
+
+        AgentSettings? settings;
+        try
+        {
+            settings = JsonSerializer.Deserialize<AgentSettings>(agent.SettingsJson, AgentSettingsJsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (settings is null || settings.ResponseParameters is null || settings.ResponseParameters.Count == 0)
+            return null;
+
+        if (!settings.ResponseParameters.TryGetValue(operationKey, out var codes) || codes is null || codes.Length == 0)
+            return null;
+
+        return new HashSet<string>(codes.Where(c => !string.IsNullOrWhiteSpace(c)), StringComparer.OrdinalIgnoreCase);
     }
 }

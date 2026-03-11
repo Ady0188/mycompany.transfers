@@ -59,18 +59,72 @@
                 </MudItem>
 
                 <MudItem xs="12">
-                    <MudText Typo="Typo.body2" Class="mb-2">Настройки (ключ — значение)</MudText>
-                    <MudStack Spacing="2">
-                        @foreach (var item in _settingsList)
-                        {
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                <MudTextField @bind-Value="item.Key" Variant="Variant.Outlined" Placeholder="Ключ" Style="min-width: 140px;" Immediate="true" />
-                                <MudTextField @bind-Value="item.Value" Variant="Variant.Outlined" Placeholder="Значение" Style="flex: 1;" Immediate="true" />
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveSetting(item))" title="Удалить" />
+                    <MudText Typo="Typo.body2" Class="mb-2">Доступные параметры в ответах (по операциям)</MudText>
+                    <MudExpansionPanels Elevation="0">
+                        <MudExpansionPanel Text="Check">
+                            <MudText Typo="Typo.caption" Class="mb-1">
+                                Коды параметров (из справочника ParamDefinition.Code), которые агент будет видеть в ответе Check.
+                            </MudText>
+                            <MudStack Row="true" Spacing="1">
+                                @foreach (var paramCode in _responseParamsCheck)
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudChip T="string" Text="@paramCode" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RemoveCode(OperationCheck, paramCode))" />
+                                    </MudStack>
+                                }
                             </MudStack>
-                        }
-                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddSetting">Добавить настройку</MudButton>
-                    </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                                <MudTextField @bind-Value="_newCodeCheck" Variant="Variant.Outlined" Placeholder="Добавить код параметра" Immediate="true" />
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddCode(OperationCheck, _newCodeCheck))">Добавить</MudButton>
+                            </MudStack>
+                        </MudExpansionPanel>
+                        <MudExpansionPanel Text="Prepare">
+                            <MudText Typo="Typo.caption" Class="mb-1">
+                                Коды параметров, которые агент будет видеть в ответе Prepare.
+                            </MudText>
+                            <MudStack Row="true" Spacing="1">
+                                @foreach (var paramCode in _responseParamsPrepare)
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudChip T="string" Text="@paramCode" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RemoveCode(OperationPrepare, paramCode))" />
+                                    </MudStack>
+                                }
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                                <MudTextField @bind-Value="_newCodePrepare" Variant="Variant.Outlined" Placeholder="Добавить код параметра" Immediate="true" />
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddCode(OperationPrepare, _newCodePrepare))">Добавить</MudButton>
+                            </MudStack>
+                        </MudExpansionPanel>
+                        <MudExpansionPanel Text="Confirm">
+                            <MudText Typo="Typo.caption" Class="mb-1">
+                                Коды параметров, которые агент будет видеть в ответе Confirm.
+                            </MudText>
+                            <MudStack Row="true" Spacing="1">
+                                @foreach (var paramCode in _responseParamsConfirm)
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudChip T="string" Text="@paramCode" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RemoveCode(OperationConfirm, paramCode))" />
+                                    </MudStack>
+                                }
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                                <MudTextField @bind-Value="_newCodeConfirm" Variant="Variant.Outlined" Placeholder="Добавить код параметра" Immediate="true" />
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddCode(OperationConfirm, _newCodeConfirm))">Добавить</MudButton>
+                            </MudStack>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                    <MudText Typo="Typo.caption" Class="mt-2">
+                        Если список для операции пустой — агент будет получать все параметры услуги (как сейчас).
+                    </MudText>
                 </MudItem>
 
                 @if (!string.IsNullOrEmpty(_error))
@@ -105,10 +159,14 @@
     };
 
     private AgentAdminDto _model = null!;
-    private List<SettingItem> _settingsList = new();
     private bool _isCreate;
     private bool _sending;
     private string? _error;
+
+    private sealed class AgentSettingsDto
+    {
+        public Dictionary<string, string[]> ResponseParameters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
 
     protected override void OnInitialized()
     {
@@ -126,42 +184,122 @@
         LoadSettingsFromJson(_model.SettingsJson);
     }
 
+    private static readonly string OperationCheck = "Check";
+    private static readonly string OperationPrepare = "Prepare";
+    private static readonly string OperationConfirm = "Confirm";
+
+    private readonly List<string> _responseParamsCheck = new();
+    private readonly List<string> _responseParamsPrepare = new();
+    private readonly List<string> _responseParamsConfirm = new();
+
+    private string _newCodeCheck = "";
+    private string _newCodePrepare = "";
+    private string _newCodeConfirm = "";
+
     private void LoadSettingsFromJson(string json)
     {
-        _settingsList.Clear();
+        _responseParamsCheck.Clear();
+        _responseParamsPrepare.Clear();
+        _responseParamsConfirm.Clear();
+
         if (string.IsNullOrWhiteSpace(json))
             return;
+
         try
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-            if (dict == null) return;
-            foreach (var kv in dict)
-                _settingsList.Add(new SettingItem { Key = kv.Key, Value = kv.Value ?? "" });
+            // Новый формат: AgentSettings
+            var settings = JsonSerializer.Deserialize<AgentSettingsDto>(json);
+            if (settings?.ResponseParameters != null)
+            {
+                if (settings.ResponseParameters.TryGetValue(OperationCheck, out var checkCodes) && checkCodes != null)
+                    _responseParamsCheck.AddRange(checkCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
+                if (settings.ResponseParameters.TryGetValue(OperationPrepare, out var prepCodes) && prepCodes != null)
+                    _responseParamsPrepare.AddRange(prepCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
+                if (settings.ResponseParameters.TryGetValue(OperationConfirm, out var confCodes) && confCodes != null)
+                    _responseParamsConfirm.AddRange(confCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
+                return;
+            }
+
+            // Старый формат: произвольный словарь — просто игнорируем, чтобы не ломать существующие данные.
         }
         catch
         {
-            // оставляем пустой список при невалидном JSON
+            // при ошибке десериализации оставляем настройки пустыми
         }
     }
 
-    private void AddSetting()
+    private void AddCode(string operation, string value)
     {
-        _settingsList.Add(new SettingItem());
+        var code = value?.Trim();
+        if (string.IsNullOrWhiteSpace(code))
+            return;
+
+        var target = operation switch
+        {
+            var op when op == OperationCheck => _responseParamsCheck,
+            var op when op == OperationPrepare => _responseParamsPrepare,
+            var op when op == OperationConfirm => _responseParamsConfirm,
+            _ => null
+        };
+
+        if (target == null || target.Contains(code, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        target.Add(code);
+
+        switch (operation)
+        {
+            case nameof(OperationCheck):
+                _newCodeCheck = "";
+                break;
+            case nameof(OperationPrepare):
+                _newCodePrepare = "";
+                break;
+            case nameof(OperationConfirm):
+                _newCodeConfirm = "";
+                break;
+        }
+
         StateHasChanged();
     }
 
-    private void RemoveSetting(SettingItem item)
+    private void RemoveCode(string operation, string code)
     {
-        _settingsList.Remove(item);
+        var target = operation switch
+        {
+            var op when op == OperationCheck => _responseParamsCheck,
+            var op when op == OperationPrepare => _responseParamsPrepare,
+            var op when op == OperationConfirm => _responseParamsConfirm,
+            _ => null
+        };
+
+        if (target == null)
+            return;
+
+        target.RemoveAll(x => string.Equals(x, code, StringComparison.OrdinalIgnoreCase));
         StateHasChanged();
     }
 
-    private static string SerializeSettingsToJson(List<SettingItem> list)
+    private static string SerializeSettingsToJson(
+        IReadOnlyCollection<string> check,
+        IReadOnlyCollection<string> prepare,
+        IReadOnlyCollection<string> confirm)
     {
-        var dict = new Dictionary<string, string>();
-        foreach (var item in list.Where(x => !string.IsNullOrWhiteSpace(x.Key)))
-            dict[item.Key.Trim()] = item.Value ?? "";
-        return dict.Count == 0 ? "{}" : JsonSerializer.Serialize(dict);
+        var settings = new AgentSettingsDto
+        {
+            ResponseParameters = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        };
+
+        if (check.Count > 0)
+            settings.ResponseParameters[OperationCheck] = check.ToArray();
+        if (prepare.Count > 0)
+            settings.ResponseParameters[OperationPrepare] = prepare.ToArray();
+        if (confirm.Count > 0)
+            settings.ResponseParameters[OperationConfirm] = confirm.ToArray();
+
+        return settings.ResponseParameters.Count == 0
+            ? "{}"
+            : JsonSerializer.Serialize(settings);
     }
 
     private Task OnNameChanged(string value)
@@ -181,7 +319,7 @@
     private async Task Submit()
     {
         _error = null;
-        _model.SettingsJson = SerializeSettingsToJson(_settingsList);
+        _model.SettingsJson = SerializeSettingsToJson(_responseParamsCheck, _responseParamsPrepare, _responseParamsConfirm);
         _sending = true;
         StateHasChanged();
         try

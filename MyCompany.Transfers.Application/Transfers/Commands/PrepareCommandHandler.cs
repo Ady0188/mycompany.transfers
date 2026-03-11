@@ -1,9 +1,11 @@
+using System.Text.Json;
 using ErrorOr;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using MyCompany.Transfers.Application.Common.Helpers;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
+using MyCompany.Transfers.Domain.Agents;
 using MyCompany.Transfers.Domain.Accounts;
 using MyCompany.Transfers.Domain.Common;
 using MyCompany.Transfers.Domain.Providers;
@@ -28,6 +30,13 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
     private readonly IProviderRepository _providers;
     private readonly TimeProvider _clock;
     private readonly ILogger<PrepareCommandHandler> _logger;
+
+    private static readonly JsonSerializerOptions AgentSettingsJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private const string OperationKeyPrepare = "Prepare";
 
     public PrepareCommandHandler(
         ITransferRepository transfers,
@@ -242,12 +251,78 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
             }
 
             _logger.LogInformation("PrepareCommandHandler: prepared ExternalId={ExternalId}, Id={Id}, Status={Status}", request.ExternalId, transfer.Id, transfer.Status);
-            return transfer.ToPrepareResponseDto(agent, terminal.BalanceMinor);
+
+            // ResolvedParameters для Prepare:
+            // берём только те, что:
+            // 1) объявлены в услуге (ServiceParamDefinition -> ParamDefinition.Code),
+            // 2) присутствуют в параметрах перевода (transfer.Parameters),
+            // 3) (опционально) разрешены настройками агента.
+            var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyPrepare);
+            var resolvedParameters = BuildResolvedParameters(service, transfer.Parameters, visibleParamCodes);
+
+            return transfer.ToPrepareResponseDto(agent, terminal.BalanceMinor, resolvedParameters);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "PrepareCommandHandler Error");
             return AppErrors.Common.Unexpected();
         }
+    }
+    /// <summary>
+    /// Собирает ResolvedParameters для Prepare по определению параметров услуги:
+    /// в ответ попадают только те поля, которые объявлены у услуги, присутствуют в параметрах перевода
+    /// и (опционально) разрешены настройками агента.
+    /// </summary>
+    private static Dictionary<string, string> BuildResolvedParameters(
+        Domain.Services.Service service,
+        IReadOnlyDictionary<string, string> transferParameters,
+        ISet<string>? allowedCodes)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (service.Parameters is null || transferParameters is null) return parameters;
+
+        foreach (var serviceParam in service.Parameters)
+        {
+            var code = serviceParam.Parameter?.Code;
+            if (string.IsNullOrWhiteSpace(code)) continue;
+
+            if (allowedCodes is not null && !allowedCodes.Contains(code))
+                continue;
+
+            if (!transferParameters.TryGetValue(code, out var value) || string.IsNullOrWhiteSpace(value))
+                continue;
+
+            parameters[code] = value;
+        }
+
+        return parameters;
+    }
+
+    /// <summary>
+    /// Возвращает множество кодов параметров (ParamDefinition.Code), разрешённых агенту для указанной операции.
+    /// null означает отсутствие дополнительной фильтрации по агенту.
+    /// </summary>
+    private static ISet<string>? GetVisibleParameterCodesForAgent(Agent agent, string operationKey)
+    {
+        if (string.IsNullOrWhiteSpace(agent.SettingsJson))
+            return null;
+
+        AgentSettings? settings;
+        try
+        {
+            settings = JsonSerializer.Deserialize<AgentSettings>(agent.SettingsJson, AgentSettingsJsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (settings is null || settings.ResponseParameters is null || settings.ResponseParameters.Count == 0)
+            return null;
+
+        if (!settings.ResponseParameters.TryGetValue(operationKey, out var codes) || codes is null || codes.Length == 0)
+            return null;
+
+        return new HashSet<string>(codes.Where(c => !string.IsNullOrWhiteSpace(c)), StringComparer.OrdinalIgnoreCase);
     }
 }

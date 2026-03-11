@@ -1,9 +1,11 @@
+using System.Text.Json;
 using ErrorOr;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using MyCompany.Transfers.Application.Common.Helpers;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
+using MyCompany.Transfers.Domain.Agents;
 using MyCompany.Transfers.Domain.Services;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Domain.Transfers.Dtos;
@@ -14,15 +16,20 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
 {
     private readonly IServiceRepository _services;
     private readonly IProviderService _providerService;
-    private readonly IParameterRepository _parameters;
     private readonly IAgentReadRepository _agents;
     private readonly IAccessRepository _access;
     private readonly IFxRateRepository _fxRates;
     private readonly ILogger<CheckCommandHandler> _logger;
 
+    private static readonly JsonSerializerOptions AgentSettingsJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private const string OperationKeyCheck = "Check";
+
     public CheckCommandHandler(
         IServiceRepository services,
-        IParameterRepository parameters,
         IAgentReadRepository agents,
         IAccessRepository access,
         IFxRateRepository fxRates,
@@ -30,7 +37,6 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
         ILogger<CheckCommandHandler> logger)
     {
         _services = services;
-        _parameters = parameters;
         _agents = agents;
         _access = access;
         _fxRates = fxRates;
@@ -118,9 +124,12 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
                 return AppErrors.Common.Validation($"Provider check failed: {providerResult.Error}");
             }
 
-            // ResolvedParameters: только поля из определения параметров услуги (ParameterDefinition),
-            // значения из стандартизированного ответа провайдера (ResponseFields по Code).
-            var parameters = BuildResolvedParameters(service, providerResult.ResponseFields);
+            // ResolvedParameters:
+            // 1) только поля из определения параметров услуги (ServiceParamDefinition -> ParamDefinition.Code),
+            // 2) значения из стандартизированного ответа провайдера (ResponseFields по Code),
+            // 3) дополнительно отфильтрованы по настройкам агента (Agent.SettingsJson -> AgentSettings.ResponseParameters).
+            var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyCheck);
+            var parameters = BuildResolvedParameters(service, providerResult.ResponseFields, visibleParamCodes);
 
             var availableCurrencies = new List<CurrencyDto>();
             var allowedCurrencies = service.AllowedCurrencies.ToList();
@@ -165,10 +174,15 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
     }
 
     /// <summary>
-    /// Собирает ResolvedParameters по определению параметров услуги (ParameterDefinition):
-    /// в ответ попадают только те поля, которые объявлены у услуги, с ключами Code из справочника.
+    /// Собирает ResolvedParameters по определению параметров услуги (ParameterDefinition)
+    /// c дополнительной фильтрацией по списку разрешённых параметров агента (если он задан).
+    /// В ответ попадают только те поля, которые объявлены у услуги, присутствуют в ответе провайдера
+    /// и (опционально) разрешены настройками агента.
     /// </summary>
-    private static Dictionary<string, string> BuildResolvedParameters(Service service, IReadOnlyDictionary<string, string> responseFields)
+    private static Dictionary<string, string> BuildResolvedParameters(
+        Service service,
+        IReadOnlyDictionary<string, string> responseFields,
+        ISet<string>? allowedCodes)
     {
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (service.Parameters is null || responseFields is null) return parameters;
@@ -177,10 +191,47 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
         {
             var code = serviceParam.Parameter?.Code;
             if (string.IsNullOrWhiteSpace(code)) continue;
-            if (!responseFields.TryGetValue(code, out var value) || string.IsNullOrWhiteSpace(value)) continue;
+
+            if (allowedCodes is not null && !allowedCodes.Contains(code))
+                continue;
+
+            if (!responseFields.TryGetValue(code, out var value) || string.IsNullOrWhiteSpace(value))
+                continue;
+
             parameters[code] = value;
         }
 
         return parameters;
     }
+
+    /// <summary>
+    /// Возвращает множество кодов параметров (ParamDefinition.Code), которые разрешено отдавать агенту
+    /// для указанной операции (Command/Query). Если настроек нет или список пустой, возвращает null,
+    /// что означает "без дополнительной фильтрации по агенту".
+    /// </summary>
+    private static ISet<string>? GetVisibleParameterCodesForAgent(Agent agent, string operationKey)
+    {
+        if (string.IsNullOrWhiteSpace(agent.SettingsJson))
+            return null;
+
+        AgentSettings? settings;
+        try
+        {
+            settings = JsonSerializer.Deserialize<AgentSettings>(agent.SettingsJson, AgentSettingsJsonOptions);
+        }
+        catch
+        {
+            // Некорректный JSON в настройках агента — не ломаем обработку, просто не применяем фильтрацию.
+            return null;
+        }
+
+        if (settings is null || settings.ResponseParameters is null || settings.ResponseParameters.Count == 0)
+            return null;
+
+        if (!settings.ResponseParameters.TryGetValue(operationKey, out var codes) || codes is null || codes.Length == 0)
+            return null;
+
+        return new HashSet<string>(codes.Where(c => !string.IsNullOrWhiteSpace(c)), StringComparer.OrdinalIgnoreCase);
+    }
 }
+
