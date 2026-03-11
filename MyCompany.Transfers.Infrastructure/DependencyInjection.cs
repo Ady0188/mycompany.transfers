@@ -110,7 +110,7 @@ public static class DependencyInjection
             return handler;
         });
 
-        services.AddHostedService<ProviderSenderWorker>();
+        //services.AddHostedService<ProviderSenderWorker>();
         //services.AddHostedService<DailyBalanceWorker>();
         //services.AddHostedService<TransferToABSIBTSenderWorker>();
         //services.AddHostedService<TransferToABSOtherSenderWorker>();
