@@ -6,6 +6,7 @@
 @inject IAgentsApiService Api
 @inject ISnackbar Snackbar
 @inject ITimeZoneListService TimeZoneService
+@inject IParametersApiService ParametersApi
 
 <MudDialog>
     <DialogContent>
@@ -77,7 +78,12 @@
                                 }
                             </MudStack>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                                <MudTextField @bind-Value="_newCodeCheck" Variant="Variant.Outlined" Placeholder="Добавить код параметра" Immediate="true" />
+                                <MudSelect T="string" @bind-Value="_newCodeCheck" Variant="Variant.Outlined" Label="Параметр">
+                                    @foreach (var p in _allParameters)
+                                    {
+                                        <MudSelectItem T="string" Value="@p.Code">@($"{p.Code} — {p.Name ?? p.Code}")</MudSelectItem>
+                                    }
+                                </MudSelect>
                                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddCode(OperationCheck, _newCodeCheck))">Добавить</MudButton>
                             </MudStack>
                         </MudExpansionPanel>
@@ -97,7 +103,12 @@
                                 }
                             </MudStack>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                                <MudTextField @bind-Value="_newCodePrepare" Variant="Variant.Outlined" Placeholder="Добавить код параметра" Immediate="true" />
+                                <MudSelect T="string" @bind-Value="_newCodePrepare" Variant="Variant.Outlined" Label="Параметр">
+                                    @foreach (var p in _allParameters)
+                                    {
+                                        <MudSelectItem T="string" Value="@p.Code">@($"{p.Code} — {p.Name ?? p.Code}")</MudSelectItem>
+                                    }
+                                </MudSelect>
                                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddCode(OperationPrepare, _newCodePrepare))">Добавить</MudButton>
                             </MudStack>
                         </MudExpansionPanel>
@@ -117,7 +128,12 @@
                                 }
                             </MudStack>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                                <MudTextField @bind-Value="_newCodeConfirm" Variant="Variant.Outlined" Placeholder="Добавить код параметра" Immediate="true" />
+                                <MudSelect T="string" @bind-Value="_newCodeConfirm" Variant="Variant.Outlined" Label="Параметр">
+                                    @foreach (var p in _allParameters)
+                                    {
+                                        <MudSelectItem T="string" Value="@p.Code">@($"{p.Code} — {p.Name ?? p.Code}")</MudSelectItem>
+                                    }
+                                </MudSelect>
                                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddCode(OperationConfirm, _newCodeConfirm))">Добавить</MudButton>
                             </MudStack>
                         </MudExpansionPanel>
@@ -125,6 +141,21 @@
                     <MudText Typo="Typo.caption" Class="mt-2">
                         Если список для операции пустой — агент будет получать все параметры услуги (как сейчас).
                     </MudText>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2" Class="mb-2">Произвольные настройки (key → value)</MudText>
+                    <MudStack Spacing="2">
+                        @foreach (var item in _settingsList)
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudTextField @bind-Value="item.Key" Variant="Variant.Outlined" Placeholder="Ключ" Style="min-width: 160px;" Immediate="true" />
+                                <MudTextField @bind-Value="item.Value" Variant="Variant.Outlined" Placeholder="Значение" Style="flex: 1;" Immediate="true" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default" OnClick="@(() => RemoveSetting(item))" title="Удалить" />
+                            </MudStack>
+                        }
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddSetting">Добавить настройку</MudButton>
+                    </MudStack>
                 </MudItem>
 
                 @if (!string.IsNullOrEmpty(_error))
@@ -166,9 +197,19 @@
     private sealed class AgentSettingsDto
     {
         public Dictionary<string, string[]> ResponseParameters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string>? Custom { get; set; }
     }
 
-    protected override void OnInitialized()
+    private sealed class SettingItem
+    {
+        public string Key { get; set; } = "";
+        public string? Value { get; set; }
+    }
+
+    private readonly List<SettingItem> _settingsList = new();
+    private List<ParameterAdminDto> _allParameters = new();
+
+    protected override async Task OnInitializedAsync()
     {
         _timeZones = TimeZoneService.GetTimeZonesForDisplay();
         _model = new AgentAdminDto
@@ -181,6 +222,17 @@
             Locale = string.IsNullOrWhiteSpace(Model.Locale) ? "ru" : Model.Locale
         };
         _isCreate = IsCreate;
+
+        try
+        {
+            var paramsResult = await ParametersApi.GetPagedAsync(1, 500);
+            _allParameters = paramsResult.Items?.ToList() ?? new List<ParameterAdminDto>();
+        }
+        catch
+        {
+            _allParameters = new List<ParameterAdminDto>();
+        }
+
         LoadSettingsFromJson(_model.SettingsJson);
     }
 
@@ -191,7 +243,6 @@
     private readonly List<string> _responseParamsCheck = new();
     private readonly List<string> _responseParamsPrepare = new();
     private readonly List<string> _responseParamsConfirm = new();
-
     private string _newCodeCheck = "";
     private string _newCodePrepare = "";
     private string _newCodeConfirm = "";
@@ -201,6 +252,7 @@
         _responseParamsCheck.Clear();
         _responseParamsPrepare.Clear();
         _responseParamsConfirm.Clear();
+        _settingsList.Clear();
 
         if (string.IsNullOrWhiteSpace(json))
             return;
@@ -209,18 +261,37 @@
         {
             // Новый формат: AgentSettings
             var settings = JsonSerializer.Deserialize<AgentSettingsDto>(json);
-            if (settings?.ResponseParameters != null)
+            if (settings is not null)
             {
-                if (settings.ResponseParameters.TryGetValue(OperationCheck, out var checkCodes) && checkCodes != null)
-                    _responseParamsCheck.AddRange(checkCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
-                if (settings.ResponseParameters.TryGetValue(OperationPrepare, out var prepCodes) && prepCodes != null)
-                    _responseParamsPrepare.AddRange(prepCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
-                if (settings.ResponseParameters.TryGetValue(OperationConfirm, out var confCodes) && confCodes != null)
-                    _responseParamsConfirm.AddRange(confCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
-                return;
+                if (settings.ResponseParameters != null)
+                {
+                    if (settings.ResponseParameters.TryGetValue(OperationCheck, out var checkCodes) && checkCodes != null)
+                        _responseParamsCheck.AddRange(checkCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
+                    if (settings.ResponseParameters.TryGetValue(OperationPrepare, out var prepCodes) && prepCodes != null)
+                        _responseParamsPrepare.AddRange(prepCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
+                    if (settings.ResponseParameters.TryGetValue(OperationConfirm, out var confCodes) && confCodes != null)
+                        _responseParamsConfirm.AddRange(confCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
+                }
+
+                if (settings.Custom is not null)
+                {
+                    foreach (var kv in settings.Custom)
+                    {
+                        _settingsList.Add(new SettingItem { Key = kv.Key, Value = kv.Value });
+                    }
+                }
+
+                if (settings.ResponseParameters != null || settings.Custom != null)
+                    return;
             }
 
-            // Старый формат: произвольный словарь — просто игнорируем, чтобы не ломать существующие данные.
+            // Старый формат: мог быть просто Dictionary<string,string> без ResponseParameters.
+            var legacy = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            if (legacy != null)
+            {
+                foreach (var kv in legacy)
+                    _settingsList.Add(new SettingItem { Key = kv.Key, Value = kv.Value });
+            }
         }
         catch
         {
@@ -280,14 +351,28 @@
         StateHasChanged();
     }
 
+    private void AddSetting()
+    {
+        _settingsList.Add(new SettingItem());
+        StateHasChanged();
+    }
+
+    private void RemoveSetting(SettingItem item)
+    {
+        _settingsList.Remove(item);
+        StateHasChanged();
+    }
+
     private static string SerializeSettingsToJson(
         IReadOnlyCollection<string> check,
         IReadOnlyCollection<string> prepare,
-        IReadOnlyCollection<string> confirm)
+        IReadOnlyCollection<string> confirm,
+        IReadOnlyCollection<SettingItem> customSettings)
     {
         var settings = new AgentSettingsDto
         {
-            ResponseParameters = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            ResponseParameters = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase),
+            Custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
 
         if (check.Count > 0)
@@ -297,9 +382,18 @@
         if (confirm.Count > 0)
             settings.ResponseParameters[OperationConfirm] = confirm.ToArray();
 
-        return settings.ResponseParameters.Count == 0
-            ? "{}"
-            : JsonSerializer.Serialize(settings);
+        foreach (var item in customSettings.Where(x => !string.IsNullOrWhiteSpace(x.Key)))
+        {
+            settings.Custom![item.Key.Trim()] = item.Value ?? "";
+        }
+
+        var hasResponse = settings.ResponseParameters.Count > 0;
+        var hasCustom = settings.Custom.Count > 0;
+
+        if (!hasResponse && !hasCustom)
+            return "{}";
+
+        return JsonSerializer.Serialize(settings);
     }
 
     private Task OnNameChanged(string value)
@@ -319,7 +413,7 @@
     private async Task Submit()
     {
         _error = null;
-        _model.SettingsJson = SerializeSettingsToJson(_responseParamsCheck, _responseParamsPrepare, _responseParamsConfirm);
+        _model.SettingsJson = SerializeSettingsToJson(_responseParamsCheck, _responseParamsPrepare, _responseParamsConfirm, _settingsList);
         _sending = true;
         StateHasChanged();
         try

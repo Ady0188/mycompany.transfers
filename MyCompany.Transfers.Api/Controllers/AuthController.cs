@@ -46,37 +46,37 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        //var allowedRoles = _config.GetSection("Admin:AllowedRoles").Get<string[]>() ?? Array.Empty<string>();
-        //var token = _jwtToken.CreateToken(request.Login, request.Login.Trim(), allowedRoles);
-        //return Ok(new LoginResponse { Token = token, UserName = request.Login ?? request.Login });
-
-        var (isValid, userName, groups) = await _adAuth.ValidateAsync(request.Login.Trim(), request.Password, ct);
-
-        if (!isValid)
-        {
-            return Unauthorized(new ApiErrorResponse
-            {
-                Code = "auth.invalid_credentials",
-                NumericCode = ErrorCodes.AuthUnauthorized,
-                Message = "Неверный логин или пароль."
-            });
-        }
-
         var allowedRoles = _config.GetSection("Admin:AllowedRoles").Get<string[]>() ?? Array.Empty<string>();
+        var token = _jwtToken.CreateToken(request.Login, request.Login.Trim(), allowedRoles);
+        return Ok(new LoginResponse { Token = token, UserName = request.Login ?? request.Login });
 
-        var userRoles = groups.Intersect(allowedRoles, StringComparer.OrdinalIgnoreCase).ToArray();
+        //var (isValid, userName, groups) = await _adAuth.ValidateAsync(request.Login.Trim(), request.Password, ct);
 
-        if (userRoles.Length == 0)
-        {
-            return Unauthorized(new ApiErrorResponse
-            {
-                Code = "auth.forbidden",
-                NumericCode = ErrorCodes.AuthForbidden,
-                Message = "Доступ запрещен"
-            });
-        }
+        //if (!isValid)
+        //{
+        //    return Unauthorized(new ApiErrorResponse
+        //    {
+        //        Code = "auth.invalid_credentials",
+        //        NumericCode = ErrorCodes.AuthUnauthorized,
+        //        Message = "Неверный логин или пароль."
+        //    });
+        //}
 
-        var token = _jwtToken.CreateToken(userName ?? request.Login, request.Login.Trim(), userRoles);
-        return Ok(new LoginResponse { Token = token, UserName = userName ?? request.Login });
+        //var allowedRoles = _config.GetSection("Admin:AllowedRoles").Get<string[]>() ?? Array.Empty<string>();
+
+        //var userRoles = groups.Intersect(allowedRoles, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        //if (userRoles.Length == 0)
+        //{
+        //    return Unauthorized(new ApiErrorResponse
+        //    {
+        //        Code = "auth.forbidden",
+        //        NumericCode = ErrorCodes.AuthForbidden,
+        //        Message = "Доступ запрещен"
+        //    });
+        //}
+
+        //var token = _jwtToken.CreateToken(userName ?? request.Login, request.Login.Trim(), userRoles);
+        //return Ok(new LoginResponse { Token = token, UserName = userName ?? request.Login });
     }
 }

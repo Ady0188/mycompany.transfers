@@ -4,7 +4,8 @@ namespace MyCompany.Transfers.Domain.Agents;
 
 /// <summary>
 /// Настройки агента, хранящиеся в поле Agent.SettingsJson.
-/// Используются для управления доступными данным в ответах команд/запросов.
+/// Используются для управления доступными данным в ответах команд/запросов
+/// и для произвольных пользовательских настроек (key/value).
 /// </summary>
 public sealed class AgentSettings
 {
@@ -15,5 +16,11 @@ public sealed class AgentSettings
     /// Если для операции нет записи, используются все параметры услуги.
     /// </summary>
     public Dictionary<string, string[]> ResponseParameters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Произвольные настройки агента (key/value), которые могут использоваться
+    /// в различных сценариях (например, шаблоны писем, дополнительные флаги и т.п.).
+    /// </summary>
+    public Dictionary<string, string> Custom { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
