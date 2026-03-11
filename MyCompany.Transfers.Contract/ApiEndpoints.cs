@@ -11,6 +11,12 @@ public static class ApiEndpoints
     // Tillabuy: XML, авторизация по конфигу (termid → agent)
     public const string TillabuyBase = "api";
 
+    /// <summary>Solidarnost: GET payment_app?Action=... , ответ application/xml.</summary>
+    public static class Solidarnost
+    {
+        public const string Base = "payment_app";
+    }
+
     public static class V1
     {
         private const string Version = $"{BaseApi}/v1";
