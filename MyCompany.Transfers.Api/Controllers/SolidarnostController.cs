@@ -1,4 +1,3 @@
-using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -7,8 +6,9 @@ using MyCompany.Transfers.Application.Transfers.Queries;
 using MyCompany.Transfers.Contract;
 using MyCompany.Transfers.Contract.Solidarnost;
 using MyCompany.Transfers.Contract.Solidarnost.Requests;
-using DomainTransferMethod = MyCompany.Transfers.Domain.Transfers.TransferMethod;
+using System.Net;
 using ContractTransferMethod = MyCompany.Transfers.Contract.Core.Requests.TransferMethod;
+using DomainTransferMethod = MyCompany.Transfers.Domain.Transfers.TransferMethod;
 
 namespace MyCompany.Transfers.Api.Controllers;
 
@@ -63,9 +63,11 @@ public sealed class SolidarnostController : ControllerBase
     private async Task<string> HandleCheckAsync(TransferRequest r, CancellationToken ct)
     {
         var method = (r.Account?.Length == 16) ? DomainTransferMethod.ByPan : DomainTransferMethod.ByPhone;
+        string serviceId = method == DomainTransferMethod.ByPan ? _options.PanServiceId : _options.PhoneServiceId;
+
         var cmd = new CheckCommand(
             _options.AgentId,
-            _options.ServiceId,
+            serviceId,
             method,
             r.Account ?? string.Empty);
 

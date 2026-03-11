@@ -8,7 +8,8 @@ public class SolidarnostOptions
     public const string SectionName = "Solidarnost";
 
     public string AgentId { get; set; } = string.Empty;
-    public string ServiceId { get; set; } = string.Empty;
+    public string PanServiceId { get; set; } = string.Empty;
+    public string PhoneServiceId { get; set; } = string.Empty;
     public string TerminalId { get; set; } = string.Empty;
     public string DefaultCurrency { get; set; } = "RUB";
 }
