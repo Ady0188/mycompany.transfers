@@ -21,6 +21,6 @@ public sealed class AgentSettings
     /// Произвольные настройки агента (key/value), которые могут использоваться
     /// в различных сценариях (например, шаблоны писем, дополнительные флаги и т.п.).
     /// </summary>
-    public Dictionary<string, string> Custom { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> Common { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 

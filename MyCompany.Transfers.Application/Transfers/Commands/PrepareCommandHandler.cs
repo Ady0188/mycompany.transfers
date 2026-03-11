@@ -254,11 +254,10 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
 
             // ResolvedParameters для Prepare:
             // берём только те, что:
-            // 1) объявлены в услуге (ServiceParamDefinition -> ParamDefinition.Code),
-            // 2) присутствуют в параметрах перевода (transfer.Parameters),
-            // 3) (опционально) разрешены настройками агента.
+            // 1) присутствуют в параметрах перевода (transfer.Parameters),
+            // 2) (опционально) разрешены настройками агента.
             var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyPrepare);
-            var resolvedParameters = BuildResolvedParameters(service, transfer.Parameters, visibleParamCodes);
+            var resolvedParameters = BuildResolvedParameters(transfer.Parameters, visibleParamCodes);
 
             return transfer.ToPrepareResponseDto(agent, terminal.BalanceMinor, resolvedParameters);
         }
@@ -269,27 +268,22 @@ public sealed class PrepareCommandHandler : IRequestHandler<PrepareCommand, Erro
         }
     }
     /// <summary>
-    /// Собирает ResolvedParameters для Prepare по определению параметров услуги:
-    /// в ответ попадают только те поля, которые объявлены у услуги, присутствуют в параметрах перевода
+    /// Собирает ResolvedParameters для Prepare:
+    /// в ответ попадают только те поля, которые присутствуют в параметрах перевода
     /// и (опционально) разрешены настройками агента.
     /// </summary>
     private static Dictionary<string, string> BuildResolvedParameters(
-        Domain.Services.Service service,
         IReadOnlyDictionary<string, string> transferParameters,
         ISet<string>? allowedCodes)
     {
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (service.Parameters is null || transferParameters is null) return parameters;
+        if (transferParameters is null) return parameters;
 
-        foreach (var serviceParam in service.Parameters)
+        foreach (var (code, value) in transferParameters)
         {
-            var code = serviceParam.Parameter?.Code;
             if (string.IsNullOrWhiteSpace(code)) continue;
-
+            if (string.IsNullOrWhiteSpace(value)) continue;
             if (allowedCodes is not null && !allowedCodes.Contains(code))
-                continue;
-
-            if (!transferParameters.TryGetValue(code, out var value) || string.IsNullOrWhiteSpace(value))
                 continue;
 
             parameters[code] = value;

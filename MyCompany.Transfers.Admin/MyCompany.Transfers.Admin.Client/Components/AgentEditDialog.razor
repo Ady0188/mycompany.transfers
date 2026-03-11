@@ -197,7 +197,7 @@
     private sealed class AgentSettingsDto
     {
         public Dictionary<string, string[]> ResponseParameters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, string>? Custom { get; set; }
+        public Dictionary<string, string>? Common { get; set; }
     }
 
     private sealed class SettingItem
@@ -273,19 +273,19 @@
                         _responseParamsConfirm.AddRange(confCodes.Where(c => !string.IsNullOrWhiteSpace(c)));
                 }
 
-                if (settings.Custom is not null)
+                if (settings.Common is not null)
                 {
-                    foreach (var kv in settings.Custom)
+                    foreach (var kv in settings.Common)
                     {
                         _settingsList.Add(new SettingItem { Key = kv.Key, Value = kv.Value });
                     }
                 }
 
-                if (settings.ResponseParameters != null || settings.Custom != null)
+                if (settings.ResponseParameters != null || settings.Common != null)
                     return;
             }
 
-            // Старый формат: мог быть просто Dictionary<string,string> без ResponseParameters.
+            // Старый формат: мог быть просто Dictionary<string,string> без ResponseParameters/Common.
             var legacy = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
             if (legacy != null)
             {
@@ -372,7 +372,7 @@
         var settings = new AgentSettingsDto
         {
             ResponseParameters = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase),
-            Custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            Common = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
 
         if (check.Count > 0)
@@ -384,13 +384,13 @@
 
         foreach (var item in customSettings.Where(x => !string.IsNullOrWhiteSpace(x.Key)))
         {
-            settings.Custom![item.Key.Trim()] = item.Value ?? "";
+            settings.Common![item.Key.Trim()] = item.Value ?? "";
         }
 
         var hasResponse = settings.ResponseParameters.Count > 0;
-        var hasCustom = settings.Custom.Count > 0;
+        var hasCommon = settings.Common.Count > 0;
 
-        if (!hasResponse && !hasCustom)
+        if (!hasResponse && !hasCommon)
             return "{}";
 
         return JsonSerializer.Serialize(settings);

@@ -125,11 +125,10 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
             }
 
             // ResolvedParameters:
-            // 1) только поля из определения параметров услуги (ServiceParamDefinition -> ParamDefinition.Code),
-            // 2) значения из стандартизированного ответа провайдера (ResponseFields по Code),
-            // 3) дополнительно отфильтрованы по настройкам агента (Agent.SettingsJson -> AgentSettings.ResponseParameters).
+            // 1) значения из стандартизированного ответа провайдера (ResponseFields по Code),
+            // 2) дополнительно отфильтрованы по настройкам агента (Agent.SettingsJson -> AgentSettings.ResponseParameters).
             var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyCheck);
-            var parameters = BuildResolvedParameters(service, providerResult.ResponseFields, visibleParamCodes);
+            var parameters = BuildResolvedParameters(providerResult.ResponseFields, visibleParamCodes);
 
             var availableCurrencies = new List<CurrencyDto>();
             var allowedCurrencies = service.AllowedCurrencies.ToList();
@@ -174,28 +173,21 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
     }
 
     /// <summary>
-    /// Собирает ResolvedParameters по определению параметров услуги (ParameterDefinition)
-    /// c дополнительной фильтрацией по списку разрешённых параметров агента (если он задан).
-    /// В ответ попадают только те поля, которые объявлены у услуги, присутствуют в ответе провайдера
-    /// и (опционально) разрешены настройками агента.
+    /// Собирает ResolvedParameters из ответа провайдера, дополнительно фильтруя по списку
+    /// разрешённых параметров агента (если он задан).
     /// </summary>
     private static Dictionary<string, string> BuildResolvedParameters(
-        Service service,
         IReadOnlyDictionary<string, string> responseFields,
         ISet<string>? allowedCodes)
     {
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (service.Parameters is null || responseFields is null) return parameters;
+        if (responseFields is null) return parameters;
 
-        foreach (var serviceParam in service.Parameters)
+        foreach (var (code, value) in responseFields)
         {
-            var code = serviceParam.Parameter?.Code;
             if (string.IsNullOrWhiteSpace(code)) continue;
-
+            if (string.IsNullOrWhiteSpace(value)) continue;
             if (allowedCodes is not null && !allowedCodes.Contains(code))
-                continue;
-
-            if (!responseFields.TryGetValue(code, out var value) || string.IsNullOrWhiteSpace(value))
                 continue;
 
             parameters[code] = value;

@@ -100,12 +100,11 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                         // Для повторного Confirm возвращаем те же ResolvedParameters,
                         // отфильтрованные по текущим настройкам агента.
                         var existingService = await _services.GetByIdAsync(transfer.ServiceId, ct);
-                        var visibleCodesExisting = existingService is null
-                            ? null
-                            : GetVisibleParameterCodesForAgent(agent!, OperationKeyConfirm);
-                        var resolvedExisting = existingService is null
-                            ? new Dictionary<string, string>(transfer.Parameters)
-                            : BuildResolvedParameters(existingService, transfer.Parameters, transfer.ProvReceivedParams ?? new Dictionary<string, string>(), visibleCodesExisting);
+                        var visibleCodesExisting = GetVisibleParameterCodesForAgent(agent!, OperationKeyConfirm);
+                        var resolvedExisting = BuildResolvedParameters(
+                            transfer.Parameters,
+                            transfer.ProvReceivedParams ?? new Dictionary<string, string>(),
+                            visibleCodesExisting);
 
                         response = transfer.ToConfirmResponseDto(agent!, termForResponse?.BalanceMinor ?? 0, resolvedExisting);
                         return true;
@@ -256,7 +255,10 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
                 // 2) значения как из параметров перевода (transfer.Parameters), так и из полученных от провайдера (ProvReceivedParams),
                 // 3) (опционально) фильтрация по настройкам агента.
                 var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyConfirm);
-                var resolvedParameters = BuildResolvedParameters(service, transfer.Parameters, transfer.ProvReceivedParams ?? new Dictionary<string, string>(), visibleParamCodes);
+                var resolvedParameters = BuildResolvedParameters(
+                    transfer.Parameters,
+                    transfer.ProvReceivedParams ?? new Dictionary<string, string>(),
+                    visibleParamCodes);
 
                 response = transfer.ToConfirmResponseDto(agent, terminal.BalanceMinor, resolvedParameters);
 
@@ -339,28 +341,36 @@ public sealed class ConfirmCommandHandler : IRequestHandler<ConfirmCommand, Erro
     /// и дополнительно фильтруем по списку разрешённых кодов агента.
     /// </summary>
     private static Dictionary<string, string> BuildResolvedParameters(
-        Domain.Services.Service service,
         IReadOnlyDictionary<string, string> transferParameters,
         IReadOnlyDictionary<string, string> provReceivedParams,
         ISet<string>? allowedCodes)
     {
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (service.Parameters is null) return parameters;
+        if (transferParameters is null && provReceivedParams is null) return parameters;
 
-        foreach (var serviceParam in service.Parameters)
+        // объединяем все ключи из обоих словарей
+        var allKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (transferParameters is not null)
+            foreach (var k in transferParameters.Keys) allKeys.Add(k);
+        if (provReceivedParams is not null)
+            foreach (var k in provReceivedParams.Keys) allKeys.Add(k);
+
+        foreach (var code in allKeys)
         {
-            var code = serviceParam.Parameter?.Code;
             if (string.IsNullOrWhiteSpace(code)) continue;
-
             if (allowedCodes is not null && !allowedCodes.Contains(code))
                 continue;
 
             string? value = null;
-            if (provReceivedParams.TryGetValue(code, out var fromProv) && !string.IsNullOrWhiteSpace(fromProv))
+            if (provReceivedParams is not null &&
+                provReceivedParams.TryGetValue(code, out var fromProv) &&
+                !string.IsNullOrWhiteSpace(fromProv))
             {
                 value = fromProv;
             }
-            else if (transferParameters.TryGetValue(code, out var fromTransfer) && !string.IsNullOrWhiteSpace(fromTransfer))
+            else if (transferParameters is not null &&
+                     transferParameters.TryGetValue(code, out var fromTransfer) &&
+                     !string.IsNullOrWhiteSpace(fromTransfer))
             {
                 value = fromTransfer;
             }
