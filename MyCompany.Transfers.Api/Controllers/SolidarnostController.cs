@@ -1,3 +1,4 @@
+using ErrorOr;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -39,8 +40,10 @@ public sealed class SolidarnostController : ControllerBase
             switch (request.Action?.ToLowerInvariant())
             {
                 case "nmtcheck":
+                    xml = await HandleNmtCheckAsync(request, ct);
+                    break;
                 case "clientcheck":
-                    xml = await HandleCheckAsync(request, ct);
+                    xml = await HandleClientCheckAsync(request, ct);
                     break;
                 case "payment":
                     xml = await HandlePaymentAsync(request, ct);
@@ -49,39 +52,77 @@ public sealed class SolidarnostController : ControllerBase
                     xml = await HandlePaycheckAsync(request, ct);
                     break;
                 default:
-                    xml = BuildErrorXml(300, "Invalid request");
+                    xml = SolidarnostErrorCodes.InvalidRequest;
                     break;
             }
             return CreateHttpResponse(xml);
         }
         catch (Exception)
         {
-            return CreateHttpResponse(BuildErrorXml(300, "Internal error"));
+            return CreateHttpResponse(SolidarnostErrorCodes.InternalError);
         }
     }
 
-    private async Task<string> HandleCheckAsync(TransferRequest r, CancellationToken ct)
+    /// <summary>nmtcheck: ответ с CREDIT_AMOUNT (как в Solidarnost.Api NmtCheckAsync).</summary>
+    private async Task<string> HandleNmtCheckAsync(TransferRequest r, CancellationToken ct)
     {
         var method = (r.Account?.Length == 16) ? DomainTransferMethod.ByPan : DomainTransferMethod.ByPhone;
-        string serviceId = method == DomainTransferMethod.ByPan ? _options.PanServiceId : _options.PhoneServiceId;
+        var serviceId = method == DomainTransferMethod.ByPan ? _options.PanServiceId : _options.PhoneServiceId;
 
-        var cmd = new CheckCommand(
-            _options.AgentId,
-            serviceId,
-            method,
-            r.Account ?? string.Empty);
-
+        var cmd = new CheckCommand(_options.AgentId, serviceId, method, r.Account ?? string.Empty);
         var result = await _mediator.Send(cmd, ct);
         if (result.IsError)
-            return BuildErrorXml(300, result.FirstError.Description);
+            return SolidarnostErrorCodes.InternalError;
 
-        return @"<response><CODE>0</CODE><MESSAGE>OK</MESSAGE></response>";
+        var p = result.Value.ResolvedParameters;
+        string? Get(string key) => p.TryGetValue(key, out var v) ? v : null;
+
+        var fio = Get("FIO");
+        var creditCurr = Get("CREDIT_CURR");
+        var receiverFee = Get("RECEIVER_FEE") ?? "0";
+        var receiverExtId = Get("RECEIVER_EXT_ID");
+        var receiverAccount = Get("RECEIVER_ACCOUNT");
+        var receiverCard = Get("RECEIVER_CARD");
+
+        decimal creditAmount = 0m;
+        if (decimal.TryParse(Get("CREDIT_AMOUNT"), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var ca))
+            creditAmount = ca;
+
+        decimal? currRate = null;
+        if (decimal.TryParse(Get("CURR_RATE"), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var cr))
+            currRate = cr;
+
+        return SolidarnostResponseBuilder.NmtCheckSuccess(
+            fio,
+            creditAmount,
+            creditCurr,
+            currRate,
+            receiverFee,
+            receiverExtId,
+            receiverAccount,
+            receiverCard);
     }
 
+    /// <summary>clientcheck: ответ без CREDIT_AMOUNT, опционально RECEIVER_ACCOUNT (как в Solidarnost.Api ClientCheckAsync).</summary>
+    private async Task<string> HandleClientCheckAsync(TransferRequest r, CancellationToken ct)
+    {
+        var method = (r.Account?.Length == 16) ? DomainTransferMethod.ByPan : DomainTransferMethod.ByPhone;
+        var serviceId = method == DomainTransferMethod.ByPan ? _options.PanServiceId : _options.PhoneServiceId;
+
+        var cmd = new CheckCommand(_options.AgentId, serviceId, method, r.Account ?? string.Empty);
+        var result = await _mediator.Send(cmd, ct);
+        if (result.IsError)
+            return SolidarnostErrorCodes.InternalError;
+
+        return SolidarnostResponseBuilder.ClientCheckSuccess();
+    }
+
+    /// <summary>payment: ответ как MapToSuccessResponse в Solidarnost.Api (CODE 0, EXT_ID, REG_DATE).</summary>
     private async Task<string> HandlePaymentAsync(TransferRequest r, CancellationToken ct)
     {
         var amountMinor = (long)Math.Round((r.Amount ?? 0m) * 100m, MidpointRounding.AwayFromZero);
         var method = (r.Account?.Length == 16) ? ContractTransferMethod.ByPan : ContractTransferMethod.ByPhone;
+        var serviceId = (r.Account?.Length == 16) ? _options.PanServiceId : _options.PhoneServiceId;
         var externalId = r.Pay_Id ?? r.ExtId ?? Guid.NewGuid().ToString();
 
         var cmd = new PrepareCommand(
@@ -93,30 +134,34 @@ public sealed class SolidarnostController : ControllerBase
             amountMinor,
             r.Currency ?? _options.DefaultCurrency,
             r.Settlement_Curr,
-            _options.ServiceId,
+            serviceId,
             new Dictionary<string, string>());
 
         var result = await _mediator.Send(cmd, ct);
         if (result.IsError)
-            return BuildErrorXml(300, result.FirstError.Description);
+            return SolidarnostErrorCodes.InternalError;
 
         var dto = result.Value;
+        var extId = dto.ExternalId ?? externalId;
         var regDate = DateTime.UtcNow.ToString("dd.MM.yyyy_HH:mm:ss");
-        return $@"<response><CODE>0</CODE><MESSAGE>Payment Successful</MESSAGE><EXT_ID>{EscapeXml(dto.ExternalId ?? externalId)}</EXT_ID><REG_DATE>{regDate}</REG_DATE></response>";
+        return SolidarnostResponseBuilder.PaymentSuccess(extId, regDate);
     }
 
+    /// <summary>paycheck: при найденном платеже — тот же формат, что и payment (MapToSuccessResponse); иначе CODE 707.</summary>
     private async Task<string> HandlePaycheckAsync(TransferRequest r, CancellationToken ct)
     {
-        var q = new GetStatusQuery(
-            _options.AgentId,
-            r.Pay_Id ?? r.ExtId,
-            null);
+        var q = new GetStatusQuery(_options.AgentId, r.Pay_Id ?? r.ExtId, null);
         var result = await _mediator.Send(q, ct);
         if (result.IsError)
-            return BuildErrorXml(300, result.FirstError.Description);
+            return result.FirstError.Type == ErrorType.NotFound
+                ? SolidarnostErrorCodes.PaymentNotFound
+                : SolidarnostErrorCodes.InternalError;
 
         var dto = result.Value;
-        return $@"<response><CODE>0</CODE><STATUS>{EscapeXml(dto.Status)}</STATUS><MESSAGE>{EscapeXml(dto.StatusMessage ?? dto.Status)}</MESSAGE></response>";
+        var extId = dto.ExternalId ?? r.Pay_Id ?? r.ExtId ?? string.Empty;
+        var regDate = dto.ConfirmedAt?.Utc ?? dto.CompletedAt?.Utc ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        var regDateFormatted = DateTime.TryParse(regDate, out var dt) ? dt.ToString("dd.MM.yyyy_HH:mm:ss") : DateTime.UtcNow.ToString("dd.MM.yyyy_HH:mm:ss");
+        return SolidarnostResponseBuilder.PaymentSuccess(extId, regDateFormatted);
     }
 
     private static IActionResult CreateHttpResponse(string content)
@@ -128,21 +173,5 @@ public sealed class SolidarnostController : ControllerBase
             ContentType = "application/xml",
             StatusCode = (int)HttpStatusCode.OK
         };
-    }
-
-    private static string BuildErrorXml(int code, string message)
-    {
-        return $@"<response><CODE>{code}</CODE><MESSAGE>{EscapeXml(message)}</MESSAGE></response>";
-    }
-
-    private static string EscapeXml(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return string.Empty;
-        return value
-            .Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&apos;");
     }
 }
