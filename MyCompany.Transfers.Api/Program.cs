@@ -1,6 +1,7 @@
 using MyCompany.Transfers.Api.Helpers;
 using MyCompany.Transfers.Api.Services;
 using MyCompany.Transfers.Application;
+using MyCompany.Transfers.Contract.Solidarnost;
 using MyCompany.Transfers.Infrastructure;
 using NLog.Web;
 
@@ -17,6 +18,7 @@ builder.Services.AddControllers(options =>
     .AddXmlSerializerFormatters();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.Configure<SolidarnostOptions>(builder.Configuration.GetSection(SolidarnostOptions.SectionName));
 builder.Services.AddScoped<IAdAuthService, AdAuthService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
