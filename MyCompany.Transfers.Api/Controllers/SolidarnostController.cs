@@ -1,7 +1,7 @@
-using ErrorOr;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using MyCompany.Transfers.Api.Helpers;
 using MyCompany.Transfers.Application.Transfers.Commands;
 using MyCompany.Transfers.Application.Transfers.Queries;
 using MyCompany.Transfers.Contract;
@@ -72,7 +72,7 @@ public sealed class SolidarnostController : ControllerBase
         var cmd = new CheckCommand(_options.AgentId, serviceId, method, r.Account ?? string.Empty);
         var result = await _mediator.Send(cmd, ct);
         if (result.IsError)
-            return SolidarnostErrorCodes.InternalError;
+            return SolidarnostErrorMapper.Map(result.FirstError, action: "nmtcheck");
 
         var p = result.Value.ResolvedParameters;
         string? Get(string key) => p.TryGetValue(key, out var v) ? v : null;
@@ -112,7 +112,7 @@ public sealed class SolidarnostController : ControllerBase
         var cmd = new CheckCommand(_options.AgentId, serviceId, method, r.Account ?? string.Empty);
         var result = await _mediator.Send(cmd, ct);
         if (result.IsError)
-            return SolidarnostErrorCodes.InternalError;
+            return SolidarnostErrorMapper.Map(result.FirstError, action: "clientcheck");
 
         return SolidarnostResponseBuilder.ClientCheckSuccess();
     }
@@ -139,7 +139,7 @@ public sealed class SolidarnostController : ControllerBase
 
         var result = await _mediator.Send(cmd, ct);
         if (result.IsError)
-            return SolidarnostErrorCodes.InternalError;
+            return SolidarnostErrorMapper.Map(result.FirstError, action: "payment");
 
         var dto = result.Value;
         var extId = dto.ExternalId ?? externalId;
@@ -153,9 +153,7 @@ public sealed class SolidarnostController : ControllerBase
         var q = new GetStatusQuery(_options.AgentId, r.Pay_Id ?? r.ExtId, null);
         var result = await _mediator.Send(q, ct);
         if (result.IsError)
-            return result.FirstError.Type == ErrorType.NotFound
-                ? SolidarnostErrorCodes.PaymentNotFound
-                : SolidarnostErrorCodes.InternalError;
+            return SolidarnostErrorMapper.Map(result.FirstError, action: "paycheck");
 
         var dto = result.Value;
         var extId = dto.ExternalId ?? r.Pay_Id ?? r.ExtId ?? string.Empty;
