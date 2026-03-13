@@ -1,6 +1,8 @@
+@using MudBlazor
 @using MyCompany.Transfers.Admin.Client.Models
 @using MyCompany.Transfers.Admin.Client.Services
 @inject IBalancesApiService BalancesApi
+@inject ITerminalsApiService TerminalsApi
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -16,7 +18,12 @@
                     <MudDatePicker @bind-Date="_filter.To" Label="Период по" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
                 </MudItem>
                 <MudItem xs="12" md="4">
-                    <MudTextField @bind-Value="_filter.TerminalId" Label="Терминал (Id)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudSelect @bind-Value="_filter.TerminalId" Label="Терминал" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var t in _terminals)
+                        {
+                            <MudSelectItem Value="@t.Id">@($"{t.Name} ({t.Id})")</MudSelectItem>
+                        }
+                    </MudSelect>
                 </MudItem>
                 <MudItem xs="12" md="4">
                     <MudTextField @bind-Value="_filter.Currency" Label="Валюта" Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -46,7 +53,7 @@
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>@context.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
-                    <MudTd>@context.TerminalId</MudTd>
+                    <MudTd>@GetTerminalDisplayName(context.TerminalId)</MudTd>
                     <MudTd>@context.Currency</MudTd>
                     <MudTd>@FormatMoney(context.CurrentBalanceMinor, context.Currency)</MudTd>
                     <MudTd>@FormatMoney(context.NewBalanceMinor, context.Currency)</MudTd>
@@ -70,23 +77,38 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public string AgentId { get; set; } = "";
     [Parameter] public string AgentName { get; set; } = "";
 
     private readonly BalanceHistoryFilterModel _filter = new();
     private readonly List<BalanceHistoryItemModel> _items = new();
+    private readonly List<TerminalListDto> _terminals = new();
     private bool _loading;
     private int _page = 1;
     private int _pageSize = 50;
     private long _totalItems;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _filter.AgentId = AgentId;
         _filter.From = DateTime.UtcNow.Date.AddDays(-7);
         _filter.To = DateTime.UtcNow.Date;
+
+        try
+        {
+            // Загружаем терминалы и фильтруем по агенту
+            var result = await TerminalsApi.GetPagedAsync(1, 1000, null);
+            var all = result.Items ?? new List<TerminalListDto>();
+            _terminals.AddRange(string.IsNullOrWhiteSpace(AgentId)
+                ? all
+                : all.Where(t => t.AgentId == AgentId));
+        }
+        catch
+        {
+            // ignore
+        }
     }
 
     private async Task LoadAsync()
@@ -123,6 +145,15 @@
     }
 
     private void Close() => MudDialog.Cancel();
+
+    private string GetTerminalDisplayName(string terminalId)
+    {
+        if (string.IsNullOrWhiteSpace(terminalId))
+            return "—";
+
+        var t = _terminals.FirstOrDefault(x => x.Id == terminalId);
+        return t is null ? terminalId : $"{t.Name} ({t.Id})";
+    }
 
     private static string FormatMoney(long minor, string currency)
     {

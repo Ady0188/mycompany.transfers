@@ -3,6 +3,7 @@
 @using MyCompany.Transfers.Admin.Client.Services
 @inject IBalancesApiService BalancesApi
 @inject IAgentsApiService AgentsApi
+@inject ITerminalsApiService TerminalsApi
 @inject ISnackbar Snackbar
 
 <PageTitle>Дневные балансы — Админ-панель</PageTitle>
@@ -29,7 +30,12 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="3">
-                <MudTextField @bind-Value="_filter.TerminalId" Label="Терминал (Id)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudSelect @bind-Value="_filter.TerminalId" Label="Терминал" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                    @foreach (var t in FilteredTerminals)
+                    {
+                        <MudSelectItem Value="@t.Id">@($"{t.Name} ({t.Id})")</MudSelectItem>
+                    }
+                </MudSelect>
             </MudItem>
             <MudItem xs="12" md="2">
                 <MudSelect @bind-Value="_filter.Currency" Label="Валюта" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
@@ -40,16 +46,10 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="3">
-                <MudTextField @bind-Value="_filter.TimeZoneId" Label="Часовой пояс (Id)" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            </MudItem>
-            <MudItem xs="12" md="3">
                 <MudSelect @bind-Value="_filter.Scope" Label="Scope" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
                     <MudSelectItem Value="@DailyBalanceScopeClient.Local">Банк (Local)</MudSelectItem>
                     <MudSelectItem Value="@DailyBalanceScopeClient.Agent">Агент (Agent)</MudSelectItem>
                 </MudSelect>
-            </MudItem>
-            <MudItem xs="12" md="2">
-                <MudTextField @bind-Value="_pageSize" Label="Записей на странице" Variant="Variant.Outlined" Margin="Margin.Dense" Type="number" />
             </MudItem>
             <MudItem xs="12" md="2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync" Disabled="@_loading">
@@ -79,7 +79,7 @@
             <RowTemplate>
                 <MudTd>@context.Date.ToString("yyyy-MM-dd")</MudTd>
                 <MudTd>@(context.AgentName ?? context.AgentId)</MudTd>
-                <MudTd>@context.TerminalId</MudTd>
+                <MudTd>@GetTerminalDisplayName(context.TerminalId)</MudTd>
                 <MudTd>@context.Currency</MudTd>
                 <MudTd>@FormatMoney(context.OpeningBalanceMinor, context.Currency)</MudTd>
                 <MudTd>@FormatMoney(context.ClosingBalanceMinor, context.Currency)</MudTd>
@@ -100,6 +100,7 @@
 @code {
     private readonly DailyBalanceFilterModel _filter = new();
     private readonly List<AgentAdminDto> _agents = new();
+    private readonly List<TerminalListDto> _terminals = new();
     private readonly List<DailyBalanceItemModel> _items = new();
     private bool _loading;
     private int _page = 1;
@@ -107,6 +108,11 @@
     private long _totalItems;
 
     private static readonly string[] _currencyOptions = { "TJS", "USD", "EUR", "RUB" };
+
+    private IEnumerable<TerminalListDto> FilteredTerminals =>
+        string.IsNullOrWhiteSpace(_filter.AgentId)
+            ? _terminals
+            : _terminals.Where(t => t.AgentId == _filter.AgentId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,6 +123,9 @@
         {
             var agents = await AgentsApi.GetPagedAsync(1, 500, null);
             _agents.AddRange(agents.Items ?? new List<AgentAdminDto>());
+
+            var terminals = await TerminalsApi.GetPagedAsync(1, 1000, null);
+            _terminals.AddRange(terminals.Items ?? new List<TerminalListDto>());
         }
         catch
         {
@@ -155,6 +164,15 @@
         _pageSize = size;
         _page = 1;
         await LoadAsync();
+    }
+
+    private string GetTerminalDisplayName(string terminalId)
+    {
+        if (string.IsNullOrWhiteSpace(terminalId))
+            return "—";
+
+        var t = _terminals.FirstOrDefault(x => x.Id == terminalId);
+        return t is null ? terminalId : $"{t.Name} ({t.Id})";
     }
 
     private static string FormatMoney(long minor, string currency)
