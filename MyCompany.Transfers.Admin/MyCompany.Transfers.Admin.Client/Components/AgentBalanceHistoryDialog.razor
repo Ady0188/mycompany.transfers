@@ -1,0 +1,133 @@
+@using MyCompany.Transfers.Admin.Client.Models
+@using MyCompany.Transfers.Admin.Client.Services
+@inject IBalancesApiService BalancesApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.h6">@($"История баланса агента {AgentName}")</MudText>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4">
+                    <MudDatePicker @bind-Date="_filter.From" Label="Период с" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudDatePicker @bind-Date="_filter.To" Label="Период по" Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_filter.TerminalId" Label="Терминал (Id)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_filter.Currency" Label="Валюта" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync" Disabled="@_loading">
+                        Показать
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+
+            <MudTable T="BalanceHistoryItemModel" Items="_items" Dense="true" Hover="true" Striped="true">
+                <HeaderContent>
+                    <MudTh>Дата/время (UTC)</MudTh>
+                    <MudTh>Терминал</MudTh>
+                    <MudTh>Валюта</MudTh>
+                    <MudTh>Остаток до</MudTh>
+                    <MudTh>Остаток после</MudTh>
+                    <MudTh>Изменение</MudTh>
+                    <MudTh>Источник</MudTh>
+                    <MudTh>ReferenceId</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+                    <MudTd>@context.TerminalId</MudTd>
+                    <MudTd>@context.Currency</MudTd>
+                    <MudTd>@FormatMoney(context.CurrentBalanceMinor, context.Currency)</MudTd>
+                    <MudTd>@FormatMoney(context.NewBalanceMinor, context.Currency)</MudTd>
+                    <MudTd>@FormatMoney(context.ChangeMinor, context.Currency)</MudTd>
+                    <MudTd>@context.ReferenceType</MudTd>
+                    <MudTd>@context.ReferenceId</MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                           PageSize="_pageSize"
+                           PageSizeChanged="OnPageSizeChanged"
+                           PageChanged="OnPageChanged"
+                           RowsPerPageString="Записей на странице:"
+                           InfoFormat="{first_item}–{last_item} из {all_items}" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Color="Color.Primary">Закрыть</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string AgentId { get; set; } = "";
+    [Parameter] public string AgentName { get; set; } = "";
+
+    private readonly BalanceHistoryFilterModel _filter = new();
+    private readonly List<BalanceHistoryItemModel> _items = new();
+    private bool _loading;
+    private int _page = 1;
+    private int _pageSize = 50;
+    private long _totalItems;
+
+    protected override void OnInitialized()
+    {
+        _filter.AgentId = AgentId;
+        _filter.From = DateTime.UtcNow.Date.AddDays(-7);
+        _filter.To = DateTime.UtcNow.Date;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await BalancesApi.GetBalanceHistoryAsync(_filter, _page, _pageSize);
+            _items.Clear();
+            _items.AddRange(result.Items);
+            _totalItems = result.TotalCount;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки истории балансов: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page + 1;
+        await LoadAsync();
+    }
+
+    private async Task OnPageSizeChanged(int size)
+    {
+        _pageSize = size;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private void Close() => MudDialog.Cancel();
+
+    private static string FormatMoney(long minor, string currency)
+    {
+        if (string.IsNullOrEmpty(currency)) return minor.ToString();
+        return $"{minor / 100m:N2} {currency}";
+    }
+}
+

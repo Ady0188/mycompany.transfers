@@ -43,6 +43,7 @@
                 <MudTd DataLabel="Часовой пояс">@TimeZoneService.GetDisplayName(context.TimeZoneId)</MudTd>
                 <MudTd DataLabel="Локаль">@((context.Locale ?? "ru").ToUpperInvariant())</MudTd>
                 <MudTd DataLabel="Действия">
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" OnClick="@(() => OpenBalanceHistory(context))" title="История балансов" />
                     <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" OnClick="@(() => OpenSentHistory(context))" title="История отправок" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" title="Изменить" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Удалить" />
@@ -139,6 +140,13 @@
         var parameters = new DialogParameters { ["AgentId"] = item.Id, ["AgentName"] = item.Name ?? item.Id };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
         await DialogService.ShowAsync<SentCredentialsHistoryDialog>("История отправок агенту", parameters, options);
+    }
+
+    private async Task OpenBalanceHistory(AgentAdminDto item)
+    {
+        var parameters = new DialogParameters { ["AgentId"] = item.Id, ["AgentName"] = item.Name ?? item.Id };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<AgentBalanceHistoryDialog>("История баланса агента", parameters, options);
     }
 
     private async Task ConfirmDelete(AgentAdminDto item)
