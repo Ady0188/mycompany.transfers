@@ -40,7 +40,7 @@ public static class SolidarnostErrorMapper
             if (Contains(d, "подпись"))
                 return SolidarnostErrorCodes.InvalidSign;
 
-            if (Contains(d, "валюта") && Contains(d, "курс") || Contains(d, "FX rate"))
+            if (Contains(d, "валют") || Contains(d, "курс") || Contains(d, "FX rate"))
                 return SolidarnostErrorCodes.RateChanged;
 
             if (Contains(d, "pay") && Contains(d, "date") || Contains(d, "дата"))

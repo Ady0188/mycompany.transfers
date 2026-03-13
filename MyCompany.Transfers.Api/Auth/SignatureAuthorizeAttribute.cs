@@ -30,6 +30,7 @@ public sealed class SignatureAuthorizeAttribute : Attribute, IAsyncAuthorization
             return;
         }
 
+        var terms = await terminals.GetAllAsync(context.HttpContext.RequestAborted);
         var term = await terminals.GetByApiKeyAsync(apiKey, context.HttpContext.RequestAborted);
         if (term is null)
         {

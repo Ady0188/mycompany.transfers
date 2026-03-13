@@ -6,7 +6,6 @@ using MyCompany.Transfers.Application.Common.Helpers;
 using MyCompany.Transfers.Application.Common.Interfaces;
 using MyCompany.Transfers.Application.Common.Providers;
 using MyCompany.Transfers.Domain.Agents;
-using MyCompany.Transfers.Domain.Services;
 using MyCompany.Transfers.Domain.Transfers;
 using MyCompany.Transfers.Domain.Transfers.Dtos;
 
@@ -91,7 +90,7 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
             var providerReq = new ProviderRequest(Source: agent.Id,
                 SourceAccount: string.Empty,
                 SourceBankIncomeAccount: null,
-                SourceCurrency: string.Empty,
+                SourceCurrency: currency,
                 Destination: string.Empty,
                 DestinationAccount: string.Empty,
                 DestinationCommissionAccount: null,
@@ -124,30 +123,37 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
                 return AppErrors.Common.Validation($"Provider check failed: {providerResult.Error}");
             }
 
-            // ResolvedParameters:
-            // 1) значения из стандартизированного ответа провайдера (ResponseFields по Code),
-            // 2) дополнительно отфильтрованы по настройкам агента (Agent.SettingsJson -> AgentSettings.ResponseParameters).
-            var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyCheck);
-            var parameters = BuildResolvedParameters(providerResult.ResponseFields, visibleParamCodes);
-
             var availableCurrencies = new List<CurrencyDto>();
             var allowedCurrencies = service.AllowedCurrencies.ToList();
-            var clientCurrencies = new List<string>();
-            if (providerResult.ResponseFields.TryGetValue("currencies", out var clientCurrenciesStr))
-                clientCurrencies = clientCurrenciesStr.Split(",").ToList();
+            var clientAccounts = new List<ClietnAccount>();
+            if (!providerResult.ResponseFields.TryGetValue("accounts", out var accounts))
+            {
+                _logger.LogWarning("CheckCommandHandler: client accounts not found in provider response");
+                return AppErrors.Common.NotFound("Счета клиента не найдены в ответе провайдера");
+            }
 
-            if (providerResult.Status != OutboxStatus.SETTING && clientCurrencies.Count == 0)
+            foreach (var account in accounts.Split(";"))
+            {
+                var parts = account.Split(",");
+                clientAccounts.Add(new ClietnAccount(parts[0],parts[1], long.TryParse(parts[2], out var id) ? id : 0));
+            }
+
+            //var clientCurrencies = new List<string>();
+            //if (providerResult.ResponseFields.TryGetValue("currencies", out var clientCurrenciesStr))
+            //    clientCurrencies = clientCurrenciesStr.Split(",").ToList();
+
+            if (providerResult.Status != OutboxStatus.SETTING && clientAccounts.Count == 0)
             {
                 _logger.LogWarning("CheckCommandHandler: client not found");
                 return AppErrors.Common.NotFound("Клиент не найден");
             }
 
-            if (providerResult.Status == OutboxStatus.SETTING)
-                clientCurrencies = service.AllowedCurrencies.ToList();
+            //if (providerResult.Status == OutboxStatus.SETTING)
+            //    clientCurrencies = service.AllowedCurrencies.ToList();
 
             foreach (var curr in allowedCurrencies)
             {
-                if (!clientCurrencies.Contains(curr)) continue;
+                if (!clientAccounts.Select(x => x.Currency).Contains(curr)) continue;
                 var fx = await _fxRates.GetAsync(m.AgentId, currency, curr, ct);
                 if (fx is null) continue;
                 availableCurrencies.Add(new CurrencyDto(currency, curr, Math.Round(fx.Value.rate, 4)));
@@ -157,6 +163,18 @@ public sealed class CheckCommandHandler : IRequestHandler<CheckCommand, ErrorOr<
             {
                 _logger.LogWarning("Нет доступных валют для услуги '{ServiceId}'.", m.ServiceId);
                 return AppErrors.Common.Validation($"Нет доступных валют для услуги '{m.ServiceId}'.");
+            }
+
+            // ResolvedParameters:
+            // 1) значения из стандартизированного ответа провайдера (ResponseFields по Code),
+            // 2) дополнительно отфильтрованы по настройкам агента (Agent.SettingsJson -> AgentSettings.ResponseParameters).
+            var visibleParamCodes = GetVisibleParameterCodesForAgent(agent, OperationKeyCheck);
+            var parameters = BuildResolvedParameters(providerResult.ResponseFields, visibleParamCodes);
+
+            if (availableCurrencies.Count == 1 && visibleParamCodes is not null && visibleParamCodes.Contains("account_number"))
+            {
+                parameters.Add("account_number", clientAccounts.First(x => x.Currency == availableCurrencies.First().Currency).Number);
+                parameters.Add("account_id", clientAccounts.First(x => x.Currency == availableCurrencies.First().Currency).Id.ToString());
             }
 
             return new CheckResponseDto

@@ -57,6 +57,7 @@ internal sealed class OracleProviderClient : IProviderClient
 
         response = response.Replace("<?xml version=\"1.0\"?>", "").Replace("OK_UTG", "OK").Trim().Replace("\n", "").Replace("\r", "");
 
+        //response = @"{""result"": 0,""description"": ""OK"",""receiver"": {""fullname"": ""Саидмирзоев Адаб Саидмирзоевич"",""firstname"": ""Адаб"",""lastname"": ""Саидмирзоев"",""middlename"": ""Саидмирзоевич"",""phone"": ""938807050"",""residency"": 1,""birth_date"": ""1988-01-19""},""accounts"": [{""number"": ""7398475987345"",""currency"": ""TJS"",""id"": 87576464654},{""number"": ""8756765465457"",""currency"": ""USD"",""id"": 65465476768}]}";
         //response = @"{""result"":0,""description"":""OK"",""fullname"":""Саидмирзоев Адаб Саидмирзоевич"",""currencies"":[""USD"",""EUR""]}";
         //response = @"{""result"":0,""description"":""OK"",""data"":{""fullname"":""Фамилия Имя Отчество"",""currencies"":[""TJS"",""RUB"",""USD""]}}";
         //response = @"{ ""result"": 0, ""description"": ""OK"", ""receiver"": { ""fullname"": ""Фамилия Имя Отчество"", ""firstname"": ""Имя"", ""lastname"": ""Фамилия"", ""middlename"": ""Отчество"", ""phone"": ""992911223344"", ""account_number"": ""987654321"", ""residency"": 0, ""birth_date"": ""1966-01-03"" }, ""currencies"": [""TJS"", ""RUB"", ""USD""] }";
@@ -186,9 +187,68 @@ internal sealed class OracleProviderClient : IProviderClient
         return values.Length > 0 ? string.Join(",", values) : current.Value;
     }
 
+    //static ParsedResponse ParseJsonResponse(string resp, ProviderOperationSettings op)
+    //{
+    static List<string> SplitResponseFields(string input)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(input))
+            return result;
+
+        var sb = new System.Text.StringBuilder();
+        int braceDepth = 0;
+        int bracketDepth = 0;
+
+        foreach (var ch in input)
+        {
+            switch (ch)
+            {
+                case '{':
+                    braceDepth++;
+                    sb.Append(ch);
+                    break;
+
+                case '}':
+                    if (braceDepth > 0)
+                        braceDepth--;
+                    sb.Append(ch);
+                    break;
+
+                case '[':
+                    bracketDepth++;
+                    sb.Append(ch);
+                    break;
+
+                case ']':
+                    if (bracketDepth > 0)
+                        bracketDepth--;
+                    sb.Append(ch);
+                    break;
+
+                case ',' when braceDepth == 0 && bracketDepth == 0:
+                    var item = sb.ToString().Trim();
+                    if (!string.IsNullOrWhiteSpace(item))
+                        result.Add(item);
+
+                    sb.Clear();
+                    break;
+
+                default:
+                    sb.Append(ch);
+                    break;
+            }
+        }
+
+        var last = sb.ToString().Trim();
+        if (!string.IsNullOrWhiteSpace(last))
+            result.Add(last);
+
+        return result;
+    }
+
     static ParsedResponse ParseJsonResponse(
-        string resp,
-        ProviderOperationSettings op)
+    string resp,
+    ProviderOperationSettings op)
     {
         if (string.IsNullOrWhiteSpace(resp))
             return new ParsedResponse(false, null, "Empty response");
@@ -198,21 +258,32 @@ internal sealed class OracleProviderClient : IProviderClient
 
         var responseFieldValues = new Dictionary<string, string>();
 
-        // читаем ResponseField как список путей через запятую
         if (!string.IsNullOrWhiteSpace(op.ResponseField))
         {
-            foreach (var field in op.ResponseField.Split(
-                         ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var field in SplitResponseFields(op.ResponseField))
             {
-                var fieldPath = field.Split("|");
-                if (fieldPath.Length == 1)
+                var fieldPath = field.Split('|', 2, StringSplitOptions.TrimEntries);
+                if (fieldPath.Length != 2)
                     continue;
 
-                var value = GetJsonValue(root, fieldPath[0]);
-                if (value is not null)
+                var sourcePath = fieldPath[0];
+                var targetKey = fieldPath[1];
+
+                var arrayObjectTemplateResult = ParseArrayObjectTemplate(root, sourcePath);
+                if (arrayObjectTemplateResult is not null)
                 {
-                    responseFieldValues[fieldPath[1]] = value;
+                    responseFieldValues[targetKey] = arrayObjectTemplateResult;
+                    continue;
                 }
+
+                var values = GetJsonValues(root, sourcePath)
+                    .Select(JsonElementToString)
+                    .Where(v => v is not null)
+                    .Select(v => v!)
+                    .ToList();
+
+                if (values.Count > 0)
+                    responseFieldValues[targetKey] = string.Join(",", values);
             }
         }
 
@@ -221,56 +292,110 @@ internal sealed class OracleProviderClient : IProviderClient
 
         if (!string.IsNullOrWhiteSpace(op.SuccessField))
         {
-            var actual = GetJsonValue(root, op.SuccessField) ?? string.Empty;
-            var expected = op.SuccessValue ?? "0";
+            var actual = GetJsonValues(root, op.SuccessField)
+                .Select(JsonElementToString)
+                .FirstOrDefault(v => v is not null) ?? string.Empty;
 
+            var expected = op.SuccessValue ?? "0";
             success = string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
 
             if (!success && !string.IsNullOrWhiteSpace(op.ErrorField))
             {
-                errorMessage = GetJsonValue(root, op.ErrorField);
+                errorMessage = GetJsonValues(root, op.ErrorField)
+                    .Select(JsonElementToString)
+                    .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
             }
         }
 
         return new ParsedResponse(success, responseFieldValues, errorMessage);
     }
 
-    static string? GetJsonValue(JsonElement root, string path)
+    static IEnumerable<JsonElement> GetJsonValues(JsonElement root, string path)
     {
-        var current = root;
+        IEnumerable<JsonElement> current = new[] { root };
 
         foreach (var rawSegment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var segment = rawSegment;
-            int? index = null;
+            var next = new List<JsonElement>();
 
-            var bracketIndex = segment.IndexOf('[');
-            if (bracketIndex >= 0)
+            ParseSegment(rawSegment, out var propName, out var index, out var isWildcard);
+
+            foreach (var item in current)
             {
-                var propName = segment[..bracketIndex];
-                var indexPart = segment[(bracketIndex + 1)..].TrimEnd(']');
+                JsonElement target = item;
 
-                if (!int.TryParse(indexPart, out var idx))
-                    return null;
+                if (!string.IsNullOrEmpty(propName))
+                {
+                    if (target.ValueKind != JsonValueKind.Object ||
+                        !target.TryGetProperty(propName, out target))
+                    {
+                        continue;
+                    }
+                }
 
-                index = idx;
-                segment = propName;
+                if (isWildcard)
+                {
+                    if (target.ValueKind != JsonValueKind.Array)
+                        continue;
+
+                    foreach (var arrItem in target.EnumerateArray())
+                        next.Add(arrItem);
+
+                    continue;
+                }
+
+                if (index.HasValue)
+                {
+                    if (target.ValueKind != JsonValueKind.Array)
+                        continue;
+
+                    if (index.Value < 0 || index.Value >= target.GetArrayLength())
+                        continue;
+
+                    next.Add(target[index.Value]);
+                    continue;
+                }
+
+                next.Add(target);
             }
 
-            if (!current.TryGetProperty(segment, out current))
-                return null;
-
-            if (index.HasValue)
-            {
-                if (current.ValueKind != JsonValueKind.Array ||
-                    index.Value >= current.GetArrayLength())
-                    return null;
-
-                current = current[index.Value];
-            }
+            current = next;
         }
 
-        return JsonElementToString(current);
+        return current;
+    }
+
+    static void ParseSegment(
+        string segment,
+        out string propName,
+        out int? index,
+        out bool isWildcard)
+    {
+        propName = segment;
+        index = null;
+        isWildcard = false;
+
+        var bracketStart = segment.IndexOf('[');
+        if (bracketStart < 0)
+            return;
+
+        var bracketEnd = segment.IndexOf(']', bracketStart);
+        if (bracketEnd < 0)
+            return;
+
+        propName = segment[..bracketStart];
+        var bracketValue = segment.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
+
+        if (bracketValue == "*")
+        {
+            isWildcard = true;
+            return;
+        }
+
+        if (int.TryParse(bracketValue, out var parsedIndex))
+        {
+            index = parsedIndex;
+        }
     }
 
     static string? JsonElementToString(JsonElement el)
@@ -290,16 +415,189 @@ internal sealed class OracleProviderClient : IProviderClient
                 return el.ToString();
 
             case JsonValueKind.Array:
-                {
-                    var items = el.EnumerateArray()
-                                  .Select(e => JsonElementToString(e) ?? string.Empty);
-                    return string.Join(",", items); // "TJS,RUB,USD"
-                }
+                return string.Join(",",
+                    el.EnumerateArray()
+                      .Select(JsonElementToString)
+                      .Where(v => v is not null)
+                      .Select(v => v!));
+
             case JsonValueKind.Object:
             default:
-                return el.GetRawText(); // на всякий случай — сырой JSON
+                return el.GetRawText();
         }
     }
+
+    static string? ParseArrayObjectTemplate(JsonElement root, string path)
+    {
+        const string marker = "[*].{";
+        var markerIndex = path.IndexOf(marker, StringComparison.Ordinal);
+
+        if (markerIndex < 0 || !path.EndsWith("}", StringComparison.Ordinal))
+            return null;
+
+        var arrayPath = path[..markerIndex];
+        var fieldsPart = path[(markerIndex + marker.Length)..^1];
+
+        if (string.IsNullOrWhiteSpace(arrayPath) || string.IsNullOrWhiteSpace(fieldsPart))
+            return null;
+
+        var fields = fieldsPart.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (fields.Length == 0)
+            return null;
+
+        var arrayElement = GetJsonValues(root, arrayPath).FirstOrDefault();
+
+        if (arrayElement.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var rows = new List<string>();
+
+        foreach (var item in arrayElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var values = new List<string>();
+
+            foreach (var field in fields)
+            {
+                if (item.TryGetProperty(field, out var prop))
+                    values.Add(EscapeCompositeValue(JsonElementToString(prop) ?? string.Empty));
+                else
+                    values.Add(string.Empty);
+            }
+
+            rows.Add(string.Join(",", values));
+        }
+
+        return string.Join(";", rows);
+    }
+
+    static string EscapeCompositeValue(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return value;
+
+        return value
+            .Replace("\\", "\\\\")
+            .Replace(",", "\\,")
+            .Replace(";", "\\;");
+    }
+
+    //static ParsedResponse ParseJsonResponse(
+    //    string resp,
+    //    ProviderOperationSettings op)
+    //{
+    //    if (string.IsNullOrWhiteSpace(resp))
+    //        return new ParsedResponse(false, null, "Empty response");
+
+    //    using var doc = JsonDocument.Parse(resp);
+    //    var root = doc.RootElement;
+
+    //    var responseFieldValues = new Dictionary<string, string>();
+
+    //    // читаем ResponseField как список путей через запятую
+    //    if (!string.IsNullOrWhiteSpace(op.ResponseField))
+    //    {
+    //        foreach (var field in op.ResponseField.Split(
+    //                     ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    //        {
+    //            var fieldPath = field.Split("|");
+    //            if (fieldPath.Length == 1)
+    //                continue;
+
+    //            var value = GetJsonValue(root, fieldPath[0]);
+    //            if (value is not null)
+    //            {
+    //                responseFieldValues[fieldPath[1]] = value;
+    //            }
+    //        }
+    //    }
+
+    //    bool success = true;
+    //    string? errorMessage = null;
+
+    //    if (!string.IsNullOrWhiteSpace(op.SuccessField))
+    //    {
+    //        var actual = GetJsonValue(root, op.SuccessField) ?? string.Empty;
+    //        var expected = op.SuccessValue ?? "0";
+
+    //        success = string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
+
+    //        if (!success && !string.IsNullOrWhiteSpace(op.ErrorField))
+    //        {
+    //            errorMessage = GetJsonValue(root, op.ErrorField);
+    //        }
+    //    }
+
+    //    return new ParsedResponse(success, responseFieldValues, errorMessage);
+    //}
+
+    //static string? GetJsonValue(JsonElement root, string path)
+    //{
+    //    var current = root;
+
+    //    foreach (var rawSegment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    //    {
+    //        var segment = rawSegment;
+    //        int? index = null;
+
+    //        var bracketIndex = segment.IndexOf('[');
+    //        if (bracketIndex >= 0)
+    //        {
+    //            var propName = segment[..bracketIndex];
+    //            var indexPart = segment[(bracketIndex + 1)..].TrimEnd(']');
+
+    //            if (!int.TryParse(indexPart, out var idx))
+    //                return null;
+
+    //            index = idx;
+    //            segment = propName;
+    //        }
+
+    //        if (!current.TryGetProperty(segment, out current))
+    //            return null;
+
+    //        if (index.HasValue)
+    //        {
+    //            if (current.ValueKind != JsonValueKind.Array ||
+    //                index.Value >= current.GetArrayLength())
+    //                return null;
+
+    //            current = current[index.Value];
+    //        }
+    //    }
+
+    //    return JsonElementToString(current);
+    //}
+
+    //static string? JsonElementToString(JsonElement el)
+    //{
+    //    switch (el.ValueKind)
+    //    {
+    //        case JsonValueKind.Null:
+    //        case JsonValueKind.Undefined:
+    //            return null;
+
+    //        case JsonValueKind.String:
+    //            return el.GetString();
+
+    //        case JsonValueKind.Number:
+    //        case JsonValueKind.True:
+    //        case JsonValueKind.False:
+    //            return el.ToString();
+
+    //        case JsonValueKind.Array:
+    //            {
+    //                var items = el.EnumerateArray()
+    //                              .Select(e => JsonElementToString(e) ?? string.Empty);
+    //                return string.Join(",", items); // "TJS,RUB,USD"
+    //            }
+    //        case JsonValueKind.Object:
+    //        default:
+    //            return el.GetRawText(); // на всякий случай — сырой JSON
+    //    }
+    //}
 
     private sealed record ParsedResponse(
         bool Success,

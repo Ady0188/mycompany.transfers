@@ -75,22 +75,22 @@ public sealed class SolidarnostController : ControllerBase
             return SolidarnostErrorMapper.Map(result.FirstError, action: "nmtcheck");
 
         var p = result.Value.ResolvedParameters;
+        var currency = result.Value.AvailableCurrencies.First().Currency;
+        var amount = r.Amount / 100m * result.Value.AvailableCurrencies.First().Rate;
+
         string? Get(string key) => p.TryGetValue(key, out var v) ? v : null;
 
-        var fio = Get("FIO");
-        var creditCurr = Get("CREDIT_CURR");
+        var firstname = Get("receiver_firstname_cyr");
+        var lastname = Get("receiver_lastname_cyr");
+        var middlename = Get("receiver_middlename_cyr");
+        var fio = $"{firstname} {middlename} {lastname?[0]}.".Trim().Replace("  ", " ");
+        var creditCurr = result.Value.AvailableCurrencies.First().Currency;
         var receiverFee = Get("RECEIVER_FEE") ?? "0";
-        var receiverExtId = Get("RECEIVER_EXT_ID");
-        var receiverAccount = Get("RECEIVER_ACCOUNT");
+        var receiverExtId = Get("account_id");
+        var receiverAccount = Get("account_number");
         var receiverCard = Get("RECEIVER_CARD");
-
-        decimal creditAmount = 0m;
-        if (decimal.TryParse(Get("CREDIT_AMOUNT"), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var ca))
-            creditAmount = ca;
-
-        decimal? currRate = null;
-        if (decimal.TryParse(Get("CURR_RATE"), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var cr))
-            currRate = cr;
+        decimal creditAmount = r.Amount / 100m * result.Value.AvailableCurrencies.First().Rate ?? 0;
+        decimal? currRate = result.Value.AvailableCurrencies.First().Rate;
 
         return SolidarnostResponseBuilder.NmtCheckSuccess(
             fio,
@@ -120,7 +120,7 @@ public sealed class SolidarnostController : ControllerBase
     /// <summary>payment: ответ как MapToSuccessResponse в Solidarnost.Api (CODE 0, EXT_ID, REG_DATE).</summary>
     private async Task<string> HandlePaymentAsync(TransferRequest r, CancellationToken ct)
     {
-        var amountMinor = (long)Math.Round((r.Amount ?? 0m) * 100m, MidpointRounding.AwayFromZero);
+        var amountMinor = (long)Math.Round((r.Amount ?? 0m), MidpointRounding.AwayFromZero);
         var method = (r.Account?.Length == 16) ? ContractTransferMethod.ByPan : ContractTransferMethod.ByPhone;
         var serviceId = (r.Account?.Length == 16) ? _options.PanServiceId : _options.PhoneServiceId;
         var externalId = r.Pay_Id ?? r.ExtId ?? Guid.NewGuid().ToString();
