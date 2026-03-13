@@ -45,17 +45,15 @@ public sealed class BalancesController : BaseController
 
         var query = _db.AgentBalanceHistories.AsNoTracking().AsQueryable();
 
-        if (from.HasValue)
-        {
-            var fromUtc = from.Value.UtcDateTime;
-            query = query.Where(h => h.CreatedAtUtc >= fromUtc);
-        }
+        // Период: "с" — с начала дня, "по" — до конца дня (исключая начало следующего дня).
+        DateTime? fromUtc = from?.UtcDateTime.Date;
+        DateTime? toUtcExclusive = to?.UtcDateTime.Date.AddDays(1);
 
-        if (to.HasValue)
-        {
-            var toUtc = to.Value.UtcDateTime;
-            query = query.Where(h => h.CreatedAtUtc <= toUtc);
-        }
+        if (fromUtc.HasValue)
+            query = query.Where(h => h.CreatedAtUtc >= fromUtc.Value);
+
+        if (toUtcExclusive.HasValue)
+            query = query.Where(h => h.CreatedAtUtc < toUtcExclusive.Value);
 
         if (!string.IsNullOrWhiteSpace(agentId))
             query = query.Where(h => h.AgentId == agentId);

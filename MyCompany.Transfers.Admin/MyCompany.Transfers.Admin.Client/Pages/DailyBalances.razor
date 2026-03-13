@@ -33,7 +33,7 @@
                 <MudSelect @bind-Value="_filter.TerminalId" Label="Терминал" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
                     @foreach (var t in FilteredTerminals)
                     {
-                        <MudSelectItem Value="@t.Id">@($"{t.Name} ({t.Id})")</MudSelectItem>
+                        <MudSelectItem Value="@t.Id">@t.Name</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
@@ -172,7 +172,7 @@
             return "—";
 
         var t = _terminals.FirstOrDefault(x => x.Id == terminalId);
-        return t is null ? terminalId : $"{t.Name} ({t.Id})";
+        return t?.Name ?? terminalId;
     }
 
     private static string FormatMoney(long minor, string currency)
