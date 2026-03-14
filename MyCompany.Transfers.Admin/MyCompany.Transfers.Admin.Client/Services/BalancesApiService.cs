@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MyCompany.Transfers.Admin.Client.Models;
 
 namespace MyCompany.Transfers.Admin.Client.Services;
@@ -13,7 +14,11 @@ public interface IBalancesApiService
 public sealed class BalancesApiService : IBalancesApiService
 {
     private readonly IHttpClientFactory _httpFactory;
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: true) }
+    };
 
     public BalancesApiService(IHttpClientFactory httpFactory) => _httpFactory = httpFactory;
 
@@ -41,7 +46,7 @@ public sealed class BalancesApiService : IBalancesApiService
         if (!string.IsNullOrWhiteSpace(filter.TimeZoneId))
             query.Add($"timeZoneId={Uri.EscapeDataString(filter.TimeZoneId.Trim())}");
         if (filter.Scope.HasValue)
-            query.Add($"scope={filter.Scope.Value}");
+            query.Add($"scope={Uri.EscapeDataString(filter.Scope.Value.ToString())}");
 
         var url = "api/admin/balances/daily?" + string.Join("&", query);
         var response = await Api().GetAsync(url, ct);

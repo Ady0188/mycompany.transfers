@@ -46,13 +46,13 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="3">
-                <MudSelect @bind-Value="_filter.Scope" Label="Scope" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
-                    <MudSelectItem Value="@DailyBalanceScopeClient.Local">Банк (Local)</MudSelectItem>
-                    <MudSelectItem Value="@DailyBalanceScopeClient.Agent">Агент (Agent)</MudSelectItem>
+                <MudSelect @bind-Value="_filter.Scope" Label="Календарь" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="false">
+                    <MudSelectItem Value="@DailyBalanceScopeClient.Local">Банк</MudSelectItem>
+                    <MudSelectItem Value="@DailyBalanceScopeClient.Agent">Агент (по часовому поясу агента)</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="2">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync" Disabled="@_loading">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="ApplyFilter" Disabled="@_loading">
                     Показать
                 </MudButton>
             </MudItem>
@@ -65,7 +65,7 @@
             <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
         }
 
-        <MudTable T="DailyBalanceItemModel" Items="_items" Dense="true" Hover="true" Striped="true">
+        <MudTable T="DailyBalanceItemModel" @key="_tableKey" ServerData="LoadServerData" Loading="_loading" Dense="true" Hover="true" Striped="true">
             <HeaderContent>
                 <MudTh>Дата</MudTh>
                 <MudTh>Агент</MudTh>
@@ -84,16 +84,14 @@
                 <MudTd>@FormatMoney(context.OpeningBalanceMinor, context.Currency)</MudTd>
                 <MudTd>@FormatMoney(context.ClosingBalanceMinor, context.Currency)</MudTd>
                 <MudTd>@context.TimeZoneId</MudTd>
-                <MudTd>@context.Scope</MudTd>
+                <MudTd>@ScopeDisplayName(context.Scope)</MudTd>
             </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                               RowsPerPageString="Записей на странице:"
+                               InfoFormat="{first_item}–{last_item} из {all_items}" />
+            </PagerContent>
         </MudTable>
-
-        <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
-                       PageSize="_pageSize"
-                       PageSizeChanged="OnPageSizeChanged"
-                       PageChanged="OnPageChanged"
-                       RowsPerPageString="Записей на странице:"
-                       InfoFormat="{first_item}–{last_item} из {all_items}" />
     </MudCard>
 </MudStack>
 
@@ -101,11 +99,8 @@
     private readonly DailyBalanceFilterModel _filter = new();
     private readonly List<AgentAdminDto> _agents = new();
     private readonly List<TerminalListDto> _terminals = new();
-    private readonly List<DailyBalanceItemModel> _items = new();
     private bool _loading;
-    private int _page = 1;
-    private int _pageSize = 50;
-    private long _totalItems;
+    private int _tableKey;
 
     private static readonly string[] _currencyOptions = { "TJS", "USD", "EUR", "RUB" };
 
@@ -118,6 +113,7 @@
     {
         _filter.From = DateTime.UtcNow.Date.AddDays(-7);
         _filter.To = DateTime.UtcNow.Date;
+        _filter.Scope = DailyBalanceScopeClient.Local; // по умолчанию — банк
 
         try
         {
@@ -133,37 +129,36 @@
         }
     }
 
-    private async Task LoadAsync()
+    private async Task<TableData<DailyBalanceItemModel>> LoadServerData(TableState state, CancellationToken ct)
     {
         _loading = true;
+        StateHasChanged();
         try
         {
-            var result = await BalancesApi.GetDailyBalancesAsync(_filter, _page, _pageSize);
-            _items.Clear();
-            _items.AddRange(result.Items);
-            _totalItems = result.TotalCount;
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+            var result = await BalancesApi.GetDailyBalancesAsync(_filter, page, pageSize);
+            return new TableData<DailyBalanceItemModel>
+            {
+                Items = result.Items ?? new List<DailyBalanceItemModel>(),
+                TotalItems = result.TotalCount
+            };
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка загрузки дневных балансов: {ex.Message}", Severity.Error);
+            return new TableData<DailyBalanceItemModel> { Items = Array.Empty<DailyBalanceItemModel>(), TotalItems = 0 };
         }
         finally
         {
             _loading = false;
+            StateHasChanged();
         }
     }
 
-    private async Task OnPageChanged(int page)
+    private void ApplyFilter()
     {
-        _page = page + 1;
-        await LoadAsync();
-    }
-
-    private async Task OnPageSizeChanged(int size)
-    {
-        _pageSize = size;
-        _page = 1;
-        await LoadAsync();
+        _tableKey++;
     }
 
     private string GetTerminalDisplayName(string terminalId)
@@ -173,6 +168,11 @@
 
         var t = _terminals.FirstOrDefault(x => x.Id == terminalId);
         return t?.Name ?? terminalId;
+    }
+
+    private static string ScopeDisplayName(DailyBalanceScopeClient scope)
+    {
+        return scope == DailyBalanceScopeClient.Agent ? "Агент" : "Банк";
     }
 
     private static string FormatMoney(long minor, string currency)

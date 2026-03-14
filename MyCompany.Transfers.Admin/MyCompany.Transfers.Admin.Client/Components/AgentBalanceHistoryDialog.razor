@@ -29,7 +29,7 @@
                     <MudTextField @bind-Value="_filter.Currency" Label="Валюта" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </MudItem>
                 <MudItem xs="12" md="4">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync" Disabled="@_loading">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="ApplyFilter" Disabled="@_loading">
                         Показать
                     </MudButton>
                 </MudItem>
@@ -40,14 +40,14 @@
                 <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
             }
 
-            <MudTable T="BalanceHistoryItemModel" Items="_items" Dense="true" Hover="true" Striped="true">
+            <MudTable T="BalanceHistoryItemModel" @key="_tableKey" ServerData="LoadServerData" Loading="_loading" Dense="true" Hover="true" Striped="true">
                 <HeaderContent>
                     <MudTh>Дата/время (UTC)</MudTh>
                     <MudTh>Терминал</MudTh>
                     <MudTh>Валюта</MudTh>
                     <MudTh>Остаток до</MudTh>
-                    <MudTh>Остаток после</MudTh>
                     <MudTh>Изменение</MudTh>
+                    <MudTh>Остаток после</MudTh>
                     <MudTh>Источник</MudTh>
                     <MudTh>ReferenceId</MudTh>
                 </HeaderContent>
@@ -56,19 +56,17 @@
                     <MudTd>@GetTerminalDisplayName(context.TerminalId)</MudTd>
                     <MudTd>@context.Currency</MudTd>
                     <MudTd>@FormatMoney(context.CurrentBalanceMinor, context.Currency)</MudTd>
-                    <MudTd>@FormatMoney(context.NewBalanceMinor, context.Currency)</MudTd>
                     <MudTd>@FormatMoney(context.ChangeMinor, context.Currency)</MudTd>
+                    <MudTd>@FormatMoney(context.NewBalanceMinor, context.Currency)</MudTd>
                     <MudTd>@context.ReferenceType</MudTd>
                     <MudTd>@context.ReferenceId</MudTd>
                 </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                                   RowsPerPageString="Записей на странице:"
+                                   InfoFormat="{first_item}–{last_item} из {all_items}" />
+                </PagerContent>
             </MudTable>
-
-            <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
-                           PageSize="_pageSize"
-                           PageSizeChanged="OnPageSizeChanged"
-                           PageChanged="OnPageChanged"
-                           RowsPerPageString="Записей на странице:"
-                           InfoFormat="{first_item}–{last_item} из {all_items}" />
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -83,12 +81,9 @@
     [Parameter] public string AgentName { get; set; } = "";
 
     private readonly BalanceHistoryFilterModel _filter = new();
-    private readonly List<BalanceHistoryItemModel> _items = new();
     private readonly List<TerminalListDto> _terminals = new();
     private bool _loading;
-    private int _page = 1;
-    private int _pageSize = 50;
-    private long _totalItems;
+    private int _tableKey;
 
     protected override async Task OnInitializedAsync()
     {
@@ -111,37 +106,36 @@
         }
     }
 
-    private async Task LoadAsync()
+    private async Task<TableData<BalanceHistoryItemModel>> LoadServerData(TableState state, CancellationToken ct)
     {
         _loading = true;
+        StateHasChanged();
         try
         {
-            var result = await BalancesApi.GetBalanceHistoryAsync(_filter, _page, _pageSize);
-            _items.Clear();
-            _items.AddRange(result.Items);
-            _totalItems = result.TotalCount;
+            var page = state.Page + 1;
+            var pageSize = state.PageSize;
+            var result = await BalancesApi.GetBalanceHistoryAsync(_filter, page, pageSize);
+            return new TableData<BalanceHistoryItemModel>
+            {
+                Items = result.Items ?? new List<BalanceHistoryItemModel>(),
+                TotalItems = result.TotalCount
+            };
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка загрузки истории балансов: {ex.Message}", Severity.Error);
+            return new TableData<BalanceHistoryItemModel> { Items = Array.Empty<BalanceHistoryItemModel>(), TotalItems = 0 };
         }
         finally
         {
             _loading = false;
+            StateHasChanged();
         }
     }
 
-    private async Task OnPageChanged(int page)
+    private void ApplyFilter()
     {
-        _page = page + 1;
-        await LoadAsync();
-    }
-
-    private async Task OnPageSizeChanged(int size)
-    {
-        _pageSize = size;
-        _page = 1;
-        await LoadAsync();
+        _tableKey++;
     }
 
     private void Close() => MudDialog.Cancel();
