@@ -45,8 +45,7 @@ public sealed class BalancesApiService : IBalancesApiService
             query.Add($"currency={Uri.EscapeDataString(filter.Currency.Trim())}");
         if (!string.IsNullOrWhiteSpace(filter.TimeZoneId))
             query.Add($"timeZoneId={Uri.EscapeDataString(filter.TimeZoneId.Trim())}");
-        if (filter.Scope.HasValue)
-            query.Add($"scope={Uri.EscapeDataString(filter.Scope.Value.ToString())}");
+        query.Add($"scope={Uri.EscapeDataString(filter.Scope.ToString())}");
 
         var url = "api/admin/balances/daily?" + string.Join("&", query);
         var response = await Api().GetAsync(url, ct);

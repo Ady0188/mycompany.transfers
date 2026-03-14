@@ -16,7 +16,8 @@ public sealed class DailyBalanceFilterModel
     public string? TerminalId { get; set; }
     public string? Currency { get; set; }
     public string? TimeZoneId { get; set; }
-    public DailyBalanceScopeClient? Scope { get; set; }
+    /// <summary>По умолчанию — Банк (Local).</summary>
+    public DailyBalanceScopeClient Scope { get; set; } = DailyBalanceScopeClient.Local;
 }
 
 public sealed class DailyBalanceItemModel

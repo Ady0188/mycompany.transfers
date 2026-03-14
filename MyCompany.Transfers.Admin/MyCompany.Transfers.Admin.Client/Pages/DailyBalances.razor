@@ -46,7 +46,7 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="3">
-                <MudSelect @bind-Value="_filter.Scope" Label="Календарь" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="false">
+                <MudSelect T="DailyBalanceScopeClient" @bind-Value="_filter.Scope" Label="Календарь" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="false" ToStringFunc="@ScopeToDisplayString">
                     <MudSelectItem Value="@DailyBalanceScopeClient.Local">Банк</MudSelectItem>
                     <MudSelectItem Value="@DailyBalanceScopeClient.Agent">Агент (по часовому поясу агента)</MudSelectItem>
                 </MudSelect>
@@ -113,7 +113,7 @@
     {
         _filter.From = DateTime.UtcNow.Date.AddDays(-7);
         _filter.To = DateTime.UtcNow.Date;
-        _filter.Scope = DailyBalanceScopeClient.Local; // по умолчанию — банк
+        // Scope по умолчанию уже Local в модели
 
         try
         {
@@ -168,6 +168,11 @@
 
         var t = _terminals.FirstOrDefault(x => x.Id == terminalId);
         return t?.Name ?? terminalId;
+    }
+
+    private static string ScopeToDisplayString(DailyBalanceScopeClient scope)
+    {
+        return scope == DailyBalanceScopeClient.Agent ? "Агент (по часовому поясу агента)" : "Банк";
     }
 
     private static string ScopeDisplayName(DailyBalanceScopeClient scope)
