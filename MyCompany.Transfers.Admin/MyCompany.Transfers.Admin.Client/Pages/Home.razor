@@ -25,7 +25,17 @@
         <MudItem xs="12" md="4">
             <MudCard Elevation="2" Class="pa-3">
                 <MudText Typo="Typo.overline" Color="Color.Secondary">Доход за 7 дней</MudText>
-                <MudText Typo="Typo.h5">@FormatMoney(_overview.RevenueLast7DaysMinor, _overview.RevenueCurrency)</MudText>
+                @if (_overview.RevenueLast7DaysByCurrency.Count == 0)
+                {
+                    <MudText Typo="Typo.h5">0</MudText>
+                }
+                else
+                {
+                    @foreach (var item in _overview.RevenueLast7DaysByCurrency)
+                    {
+                        <MudText Typo="Typo.h5">@FormatMoney(item.AmountMinor, item.Currency)</MudText>
+                    }
+                }
             </MudCard>
         </MudItem>
     </MudGrid>
@@ -90,6 +100,7 @@
             _overview.TransfersLast7Days = data.TransfersLast7Days;
             _overview.RevenueLast7DaysMinor = data.RevenueLast7DaysMinor;
             _overview.RevenueCurrency = data.RevenueCurrency;
+            _overview.RevenueLast7DaysByCurrency = data.RevenueLast7DaysByCurrency ?? new List<RevenueByCurrencyModel>();
             _overview.Last14DaysLabels = data.Last14DaysLabels;
             _overview.Last14DaysTransfers = data.Last14DaysTransfers;
             _overview.Last14DaysRevenueMinor = data.Last14DaysRevenueMinor;

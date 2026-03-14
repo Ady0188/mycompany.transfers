@@ -2,6 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace MyCompany.Transfers.Admin.Client.Models;
 
+public sealed class RevenueByCurrencyModel
+{
+    [JsonPropertyName("currency")]
+    public string Currency { get; set; } = "";
+
+    [JsonPropertyName("amountMinor")]
+    public long AmountMinor { get; set; }
+}
+
 public sealed class DashboardOverviewModel
 {
     [JsonPropertyName("transfersToday")]
@@ -15,6 +24,9 @@ public sealed class DashboardOverviewModel
 
     [JsonPropertyName("revenueCurrency")]
     public string RevenueCurrency { get; set; } = "";
+
+    [JsonPropertyName("revenueLast7DaysByCurrency")]
+    public List<RevenueByCurrencyModel> RevenueLast7DaysByCurrency { get; set; } = new();
 
     [JsonPropertyName("last14DaysLabels")]
     public List<string> Last14DaysLabels { get; set; } = new();

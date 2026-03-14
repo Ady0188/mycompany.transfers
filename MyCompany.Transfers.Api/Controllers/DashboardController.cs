@@ -5,12 +5,20 @@ using MyCompany.Transfers.Application.Reports.Transfers;
 
 namespace MyCompany.Transfers.Api.Controllers;
 
+public sealed class RevenueByCurrencyDto
+{
+    public string Currency { get; init; } = "";
+    public long AmountMinor { get; init; }
+}
+
 public sealed class DashboardOverviewDto
 {
     public long TransfersToday { get; init; }
     public long TransfersLast7Days { get; init; }
     public long RevenueLast7DaysMinor { get; init; }
     public string RevenueCurrency { get; init; } = "";
+    /// <summary>Доход за 7 дней в разрезе валют.</summary>
+    public IReadOnlyList<RevenueByCurrencyDto> RevenueLast7DaysByCurrency { get; init; } = Array.Empty<RevenueByCurrencyDto>();
     public IReadOnlyList<string> Last14DaysLabels { get; init; } = Array.Empty<string>();
     public IReadOnlyList<long> Last14DaysTransfers { get; init; } = Array.Empty<long>();
     public IReadOnlyList<long> Last14DaysRevenueMinor { get; init; } = Array.Empty<long>();
@@ -73,10 +81,16 @@ public sealed class DashboardController : BaseController
         var transfersLast7 = periodItems
             .Where(i => i.PeriodStart.Date >= from7Date)
             .Sum(i => i.TransfersCount);
-        var revenueLast7Minor = revenueItems
+        var revenueLast7Items = revenueItems
             .Where(i => i.PeriodStart.Date >= from7Date)
-            .Sum(i => i.MarginMinor);
-        var revenueCurrency = revenueItems.FirstOrDefault()?.Currency ?? "TJS";
+            .ToList();
+        var revenueLast7ByCurrency = revenueLast7Items
+            .GroupBy(i => i.Currency, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new RevenueByCurrencyDto { Currency = g.Key, AmountMinor = g.Sum(x => x.MarginMinor) })
+            .OrderBy(x => x.Currency)
+            .ToList();
+        var revenueLast7Minor = revenueLast7ByCurrency.Sum(x => x.AmountMinor);
+        var revenueCurrency = revenueLast7ByCurrency.FirstOrDefault()?.Currency ?? "TJS";
 
         var transfersToday = periodItems
             .Where(i => i.PeriodStart.Date == todayDate)
@@ -93,6 +107,7 @@ public sealed class DashboardController : BaseController
             TransfersLast7Days = transfersLast7,
             RevenueLast7DaysMinor = revenueLast7Minor,
             RevenueCurrency = revenueCurrency,
+            RevenueLast7DaysByCurrency = revenueLast7ByCurrency,
             Last14DaysLabels = labels,
             Last14DaysTransfers = transfersSeries,
             Last14DaysRevenueMinor = revenueSeries,
